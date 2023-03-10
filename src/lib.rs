@@ -4,13 +4,14 @@ use opentelemetry::{
         trace::{ExportResult, SpanData, SpanExporter},
         ExportError,
     },
-    trace::{SpanId, TraceError},
+    trace::{SpanId, TraceError, SpanKind, Status},
     Key, Value,
 };
 
 use futures_util::future::BoxFuture;
 use opentelemetry_api::{global, trace::TracerProvider};
-use std::{fmt::Debug};
+use tracelogging_dynamic::*;
+use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct PipelineBuilder {
@@ -67,8 +68,8 @@ impl PipelineBuilder {
     }
 }
 
-fn add_attributes_to_event2(
-    eb: &mut tracelogging_dynamic::EventBuilder,
+fn add_attributes_to_event(
+    eb: &mut EventBuilder,
     attribs: &mut dyn Iterator<Item = (&Key, &Value)>,
 ) {
     for attrib in attribs {
@@ -77,7 +78,7 @@ fn add_attributes_to_event2(
                 eb.add_bool32(
                     &attrib.0.to_string(),
                     b.to_owned().into(),
-                    tracelogging_dynamic::OutType::Boolean,
+                    OutType::Boolean,
                     0,
                 );
             }
@@ -85,7 +86,7 @@ fn add_attributes_to_event2(
                 eb.add_i64(
                     &attrib.0.to_string(),
                     *i,
-                    tracelogging_dynamic::OutType::Signed,
+                    OutType::Signed,
                     0,
                 );
             }
@@ -93,7 +94,7 @@ fn add_attributes_to_event2(
                 eb.add_f64(
                     &attrib.0.to_string(),
                     *f,
-                    tracelogging_dynamic::OutType::Signed,
+                    OutType::Signed,
                     0,
                 );
             }
@@ -101,7 +102,7 @@ fn add_attributes_to_event2(
                 eb.add_str8(
                     &attrib.0.to_string(),
                     &s.to_string(),
-                    tracelogging_dynamic::OutType::String,
+                    OutType::Utf8,
                     0,
                 );
             }
@@ -114,16 +115,16 @@ fn add_attributes_to_event2(
 
 #[derive(Debug)]
 pub struct Exporter {
-    provider: std::pin::Pin<Box<tracelogging_dynamic::Provider>>,
+    provider: std::pin::Pin<Box<Provider>>,
 }
 
 impl Exporter {
     pub fn new(provider_name: &str) -> Self {
-        let mut provider = Box::pin(tracelogging_dynamic::Provider::new());
+        let mut provider = Box::pin(Provider::new());
         unsafe {
             provider
                 .as_mut()
-                .register(provider_name, &tracelogging_dynamic::Provider::options());
+                .register(provider_name, &Provider::options());
         }
         Exporter { provider }
     }
@@ -131,19 +132,19 @@ impl Exporter {
 
 impl SpanExporter for Exporter {
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
-        let mut eb = tracelogging_dynamic::EventBuilder::new();
+        let mut eb = EventBuilder::new();
 
         for span in batch {
             if self
                 .provider
-                .enabled(tracelogging_dynamic::Level::Informational, 0)
+                .enabled(Level::Informational, 0)
             {
                 let activity =
-                    tracelogging_dynamic::Guid::from_name(&span.span_context.span_id().to_string());
+                    Guid::from_name(&span.span_context.span_id().to_string());
                 let parent_activity = if span.parent_span_id == SpanId::INVALID {
                     None
                 } else {
-                    Some(tracelogging_dynamic::Guid::from_name(
+                    Some(Guid::from_name(
                         &span.parent_span_id.to_string(),
                     ))
                 };
@@ -160,23 +161,48 @@ impl SpanExporter for Exporter {
                     (start_time.nanosecond() / 1000000) as u16,
                 ];
 
-                eb.reset(&span.name, tracelogging_dynamic::Level::Informational, 0, 0);
-                eb.opcode(tracelogging_dynamic::Opcode::Start);
+                let level = match span.status {
+                    Status::Ok => Level::Informational,
+                    Status::Error{..} => Level::Error,
+                    Status::Unset => Level::Verbose,
+                };
+
+                eb.reset(&span.name, level, 0, 0);
+                eb.opcode(Opcode::Start);
                 eb.add_systemtime(
                     "start_time",
                     &start_time_data,
-                    tracelogging_dynamic::OutType::DateTime,
+                    OutType::DateTime,
                     0,
                 );
 
-                add_attributes_to_event2(&mut eb, &mut span.attributes.iter());
+                eb.add_str8(
+                    "span_kind",
+                    match span.span_kind {
+                        SpanKind::Client => "Client",
+                        SpanKind::Server => "Server",
+                        SpanKind::Producer => "Producer",
+                        SpanKind::Consumer => "Consumer",
+                        SpanKind::Internal => "Internal",
+                    },
+                    OutType::Utf8,
+                    0,
+                );
+
+                if let Status::Error{description} = span.status {
+                    eb.add_str8("error", description.to_string(), OutType::Utf8, 0);
+                };
+
+                add_attributes_to_event(&mut eb, &mut span.attributes.iter());
 
                 let mut win32err =
                     eb.write(&self.provider, Some(&activity), parent_activity.as_ref());
 
                 if win32err != 0 {
                     return Box::pin(std::future::ready(Err(TraceError::ExportFailed(Box::new(
-                        Error { _win32err: win32err },
+                        Error {
+                            _win32err: win32err,
+                        },
                     )))));
                 }
 
@@ -193,16 +219,16 @@ impl SpanExporter for Exporter {
                         (event_time.nanosecond() / 1000000) as u16,
                     ];
 
-                    eb.reset(&event.name, tracelogging_dynamic::Level::Verbose, 0, 0);
-                    eb.opcode(tracelogging_dynamic::Opcode::Info);
+                    eb.reset(&event.name, Level::Verbose, 0, 0);
+                    eb.opcode(Opcode::Info);
                     eb.add_systemtime(
                         "time",
                         &event_time_data,
-                        tracelogging_dynamic::OutType::DateTime,
+                        OutType::DateTime,
                         0,
                     );
 
-                    add_attributes_to_event2(
+                    add_attributes_to_event(
                         &mut eb,
                         &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
                     );
@@ -211,7 +237,9 @@ impl SpanExporter for Exporter {
 
                     if win32err != 0 {
                         return Box::pin(std::future::ready(Err(TraceError::ExportFailed(
-                            Box::new(Error { _win32err: win32err }),
+                            Box::new(Error {
+                                _win32err: win32err,
+                            }),
                         ))));
                     }
                 }
@@ -228,12 +256,12 @@ impl SpanExporter for Exporter {
                     (end_time.nanosecond() / 1000000) as u16,
                 ];
 
-                eb.reset(&span.name, tracelogging_dynamic::Level::Informational, 0, 0);
-                eb.opcode(tracelogging_dynamic::Opcode::Stop);
+                eb.reset(&span.name, Level::Informational, 0, 0);
+                eb.opcode(Opcode::Stop);
                 eb.add_systemtime(
                     "end_time",
                     &end_time_data,
-                    tracelogging_dynamic::OutType::DateTime,
+                    OutType::DateTime,
                     0,
                 );
 
@@ -241,7 +269,9 @@ impl SpanExporter for Exporter {
 
                 if win32err != 0 {
                     return Box::pin(std::future::ready(Err(TraceError::ExportFailed(Box::new(
-                        Error { _win32err: win32err },
+                        Error {
+                            _win32err: win32err,
+                        },
                     )))));
                 }
             }

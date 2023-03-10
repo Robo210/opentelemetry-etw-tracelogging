@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 opentelemetry = "0.18"
 tracelogging_dynamic = "0.1"
-opentelemetry_api = "0.18"
+opentelemetry_api = {version="0.18", default-features = false, features=["trace"]}
 opentelemetry_sdk = "0.18"
 futures-util = "0.3"
 chrono = {version="0.4", default-features = false, features=["std"]}
