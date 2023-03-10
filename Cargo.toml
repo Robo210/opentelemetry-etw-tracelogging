@@ -1,0 +1,13 @@
+[package]
+name = "opentelemetry-etw-tracelogging"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+opentelemetry = "0.18"
+tracelogging_dynamic = "0.1"
+opentelemetry_api = "0.18"
+opentelemetry_sdk = "0.18"
+futures-util = "0.3"
