@@ -13,6 +13,10 @@ use opentelemetry_api::{global, trace::TracerProvider};
 use std::fmt::Debug;
 use tracelogging_dynamic::*;
 
+const GROUP_ID: Guid = Guid::from_fields(0xe60ec51a, 0x8e54, 0x5a4f, [0x2f, 0xb2, 0x60, 0xa4, 0xf9, 0x21, 0x3b, 0x3a]);
+const EVENT_TAG_IGNORE_EVENT_TIME: u32 = 12345;
+const FIELD_TAG_IS_REAL_EVENT_TIME: u32 = 98765;
+
 #[derive(Debug)]
 pub struct PipelineBuilder {
     provider_name: String,
@@ -58,6 +62,7 @@ impl PipelineBuilder {
 
         let mut provider_builder =
             opentelemetry_sdk::trace::TracerProvider::builder().with_simple_exporter(exporter);
+
         if let Some(config) = self.trace_config.take() {
             provider_builder = provider_builder.with_config(config);
         }
@@ -186,7 +191,7 @@ impl Exporter {
         unsafe {
             provider
                 .as_mut()
-                .register(provider_name, &Provider::options());
+                .register(provider_name, &Provider::options().group_id(&GROUP_ID));
         }
         Exporter {
             provider,
@@ -218,9 +223,9 @@ impl SpanExporter for Exporter {
                     Some(Guid::from_name(&span.parent_span_id.to_string()))
                 };
 
-                ebw.eb.reset(&span.name, level, keyword, 0);
+                ebw.eb.reset(&span.name, level, keyword, EVENT_TAG_IGNORE_EVENT_TIME);
                 ebw.eb.opcode(Opcode::Start);
-                ebw.add_win32_systemtime("start_time", &span.start_time.into(), 0);
+                ebw.add_win32_systemtime("start_time", &span.start_time.into(), FIELD_TAG_IS_REAL_EVENT_TIME);
 
                 ebw.add_string(
                     "span_kind",
@@ -253,10 +258,10 @@ impl SpanExporter for Exporter {
                 if self.provider.enabled(Level::Verbose, self.event_keywords) {
                     for event in span.events {
                         ebw.eb
-                            .reset(&event.name, Level::Verbose, self.event_keywords, 0);
+                            .reset(&event.name, Level::Verbose, self.event_keywords, EVENT_TAG_IGNORE_EVENT_TIME);
                         ebw.eb.opcode(Opcode::Info);
 
-                        ebw.add_win32_systemtime("time", &event.timestamp.into(), 0);
+                        ebw.add_win32_systemtime("time", &event.timestamp.into(), FIELD_TAG_IS_REAL_EVENT_TIME);
 
                         add_attributes_to_event(
                             &mut ebw,
@@ -275,10 +280,10 @@ impl SpanExporter for Exporter {
                     }
                 }
 
-                ebw.eb.reset(&span.name, level, keyword, 0);
+                ebw.eb.reset(&span.name, level, keyword, EVENT_TAG_IGNORE_EVENT_TIME);
                 ebw.eb.opcode(Opcode::Stop);
 
-                ebw.add_win32_systemtime("end_time", &span.end_time.into(), 0);
+                ebw.add_win32_systemtime("end_time", &span.end_time.into(), FIELD_TAG_IS_REAL_EVENT_TIME);
 
                 win32err = ebw
                     .eb
