@@ -1,5 +1,5 @@
-use opentelemetry::trace::{TraceContextExt};
-use opentelemetry::{Key};
+use opentelemetry::trace::TraceContextExt;
+use opentelemetry::Key;
 use opentelemetry_api::global::shutdown_tracer_provider;
 use opentelemetry_api::trace::{Span, Tracer};
 
@@ -27,13 +27,13 @@ fn main() {
             .with_status(opentelemetry::trace::Status::Error {
                 description: "asdf".into(),
             });
-        
+
         let mut span = tracer.build(span_builder);
 
         std::thread::sleep(std::time::Duration::from_millis(1000));
         span.add_event("qwerty", vec![]);
         std::thread::sleep(std::time::Duration::from_millis(1000));
-        });
+    });
 
     shutdown_tracer_provider(); // sending remaining spans
 }
