@@ -1,5 +1,5 @@
-use opentelemetry::trace::TraceContextExt;
-use opentelemetry::Key;
+use opentelemetry::trace::{TraceContextExt};
+use opentelemetry::{Key};
 use opentelemetry_api::global::shutdown_tracer_provider;
 use opentelemetry_api::trace::{Span, Tracer};
 
@@ -20,19 +20,20 @@ fn main() {
             "sabo",
             vec![KYLE_KEY.string("is cool"), SABO_KEY.string("is great")],
         );
-    });
 
-    let span_builder = tracer
-        .span_builder("my_cool_span")
-        .with_kind(opentelemetry::trace::SpanKind::Client)
-        .with_status(opentelemetry::trace::Status::Error {
-            description: "asdf".into(),
+        let span_builder = tracer
+            .span_builder("my_cool_span")
+            .with_kind(opentelemetry::trace::SpanKind::Client)
+            .with_status(opentelemetry::trace::Status::Error {
+                description: "asdf".into(),
+            });
+        
+        let mut span = tracer.build(span_builder);
+
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        span.add_event("qwerty", vec![]);
+        std::thread::sleep(std::time::Duration::from_millis(1000));
         });
-    let mut span = span_builder.start(&tracer);
-    std::thread::sleep(std::time::Duration::from_millis(1000));
-    span.add_event("qwerty", vec![]);
-    std::thread::sleep(std::time::Duration::from_millis(1000));
 
-    drop(span);
     shutdown_tracer_provider(); // sending remaining spans
 }
