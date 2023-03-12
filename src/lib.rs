@@ -36,16 +36,14 @@
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
 //!
-//! fn main() {
-//!     let tracer = opentelemetry_etw_tracelogging::new_pipeline("MyEtwProviderName")
-//!         .install_simple();
+//! let tracer = opentelemetry_etw_tracelogging::new_pipeline("MyEtwProviderName")
+//!     .install_simple();
 //!
-//!     tracer.in_span("doing_work", |cx| {
-//!         // Traced app logic here...
-//!     });
+//! tracer.in_span("doing_work", |cx| {
+//!     // Traced app logic here...
+//! });
 //!
-//!     shutdown_tracer_provider(); // sending remaining spans
-//! }
+//! shutdown_tracer_provider(); // sending remaining spans
 //! ```
 use chrono::{Datelike, Timelike};
 use opentelemetry::{
@@ -244,7 +242,7 @@ impl Exporter {
         unsafe {
             provider
                 .as_mut()
-                .register(provider_name, &Provider::options().group_id(&GROUP_ID));
+                .register(provider_name, Provider::options().group_id(&GROUP_ID));
         }
         Exporter {
             provider,
