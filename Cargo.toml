@@ -7,7 +7,8 @@ edition = "2021"
 
 [dependencies]
 opentelemetry = "0.18"
-tracelogging_dynamic = "0.1"
+tracelogging = "1.0"
+tracelogging_dynamic = "1.0"
 opentelemetry_api = {version="0.18", default-features = false, features=["trace"]}
 opentelemetry_sdk = "0.18"
 futures-util = "0.3"

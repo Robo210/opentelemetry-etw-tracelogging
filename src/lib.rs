@@ -1,3 +1,52 @@
+//! # ETW Span Exporter
+//!
+//! The ETW [`SpanExporter`] logs spans as ETW events.
+//! Spans are logged as activity start and stop events,
+//! using auto-generated activity IDs.
+//! Events in a span are logged as ETW events using the
+//! span's activity ID.
+//!
+//! The ETW provider ID is generated from a hash of the
+//! specified provider name.
+//!
+//! The ETW provider is joined to the group
+//! `{e60ec51a-8e54-5a4f-2fb260a4f9213b3a}`. Events in this
+//! group should be interpreted according to the event and
+//! field tags on each event.
+//!
+//! By default, span start and stop events are logged with
+//! keyword 1 and [`Level::Informational`]. Events attached
+//! to the span are logged with keyword 2 and ['Level::Verbose`].
+//!
+//! # ETW Timestamps
+//!
+//! Spans are exported asynchronously and in batches.
+//! Because of this, the timestamps on the ETW events
+//! do not represent the time the span was originally
+//! started or ended.
+//!
+//! When an ETW event has the EVENT_TAG_IGNORE_EVENT_TIME tag,
+//! the timestamp on the EVENT_RECORD should be ignored when
+//! processing the event. To get the real time of the event,
+//! look for a field tagged with FIELD_TAG_IS_REAL_EVENT_TIME.
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use opentelemetry_api::global::shutdown_tracer_provider;
+//! use opentelemetry_api::trace::Tracer;
+//!
+//! fn main() {
+//!     let tracer = opentelemetry_etw_tracelogging::new_pipeline("MyEtwProviderName")
+//!         .install_simple();
+//!
+//!     tracer.in_span("doing_work", |cx| {
+//!         // Traced app logic here...
+//!     });
+//!
+//!     shutdown_tracer_provider(); // sending remaining spans
+//! }
+//! ```
 use chrono::{Datelike, Timelike};
 use opentelemetry::{
     sdk::export::{
@@ -11,46 +60,45 @@ use opentelemetry::{
 use futures_util::future::BoxFuture;
 use opentelemetry_api::{global, trace::TracerProvider};
 use std::fmt::Debug;
+use tracelogging::filetime_from_systemtime;
 use tracelogging_dynamic::*;
 
-const GROUP_ID: Guid = Guid::from_fields(
+/// {e60ec51a-8e54-5a4f-2fb260a4f9213b3a}
+/// Events in this group were (re)logged from OpenTelemetry.
+/// Use the event tags and field tags to properly interpret these events.
+pub const GROUP_ID: Guid = Guid::from_fields(
     0xe60ec51a,
     0x8e54,
     0x5a4f,
     [0x2f, 0xb2, 0x60, 0xa4, 0xf9, 0x21, 0x3b, 0x3a],
 );
-const EVENT_TAG_IGNORE_EVENT_TIME: u32 = 12345;
-const FIELD_TAG_IS_REAL_EVENT_TIME: u32 = 98765;
+/// The ETW event's timestamp is not meaningful.
+/// Use the field tags to find the timestamp value to use.
+pub const EVENT_TAG_IGNORE_EVENT_TIME: u32 = 12345;
+/// This field contains the actual timestamp of the event.
+pub const FIELD_TAG_IS_REAL_EVENT_TIME: u32 = 98765;
 
 #[derive(Debug)]
 pub struct PipelineBuilder {
     provider_name: String,
-    keyword: u64,
+    provider_id: Guid,
     trace_config: Option<opentelemetry_sdk::trace::Config>,
 }
 
-pub fn new_pipeline() -> PipelineBuilder {
-    PipelineBuilder::default()
-}
-
-impl Default for PipelineBuilder {
-    fn default() -> Self {
-        Self {
-            provider_name: "TraceLogging-OpenTelemetry".to_owned(),
-            keyword: 1,
-            trace_config: None,
-        }
+pub fn new_pipeline(name: &str) -> PipelineBuilder {
+    PipelineBuilder {
+        provider_name: name.to_owned(),
+        provider_id: Guid::from_name(name),
+        trace_config: None,
     }
 }
 
 impl PipelineBuilder {
-    pub fn with_name(mut self, name: &str) -> Self {
-        self.provider_name = name.to_owned();
-        self
-    }
-
-    pub fn with_keyword(mut self, keyword: u64) -> Self {
-        self.keyword = keyword;
+    /// For advanced scenarios.
+    /// Assign a provider ID to the ETW provider rather than use
+    /// one generated from the provider name.
+    pub fn with_provider_id(mut self, guid: &Guid) -> Self {
+        self.provider_id = guid.to_owned();
         self
     }
 
@@ -152,7 +200,7 @@ impl EventBuilderWrapper {
         self.eb.add_systemtime(
             field_name,
             &win32_systemtime.st,
-            OutType::DateTime,
+            OutType::DateTimeUtc,
             field_tag,
         );
         self
@@ -231,11 +279,14 @@ impl SpanExporter for Exporter {
                 ebw.eb
                     .reset(&span.name, level, keyword, EVENT_TAG_IGNORE_EVENT_TIME);
                 ebw.eb.opcode(Opcode::Start);
-                ebw.add_win32_systemtime(
-                    "start_time",
-                    &span.start_time.into(),
+
+                ebw.eb.add_filetime(
+                    "otel_event_time",
+                    filetime_from_systemtime!(span.start_time),
+                    OutType::DateTimeUtc,
                     FIELD_TAG_IS_REAL_EVENT_TIME,
                 );
+                ebw.add_win32_systemtime("start_time", &span.start_time.into(), 0);
 
                 ebw.add_string(
                     "span_kind",
@@ -275,11 +326,13 @@ impl SpanExporter for Exporter {
                         );
                         ebw.eb.opcode(Opcode::Info);
 
-                        ebw.add_win32_systemtime(
-                            "time",
-                            &event.timestamp.into(),
+                        ebw.eb.add_filetime(
+                            "otel_event_time",
+                            filetime_from_systemtime!(event.timestamp),
+                            OutType::DateTimeUtc,
                             FIELD_TAG_IS_REAL_EVENT_TIME,
                         );
+                        ebw.add_win32_systemtime("time", &event.timestamp.into(), 0);
 
                         add_attributes_to_event(
                             &mut ebw,
@@ -302,11 +355,13 @@ impl SpanExporter for Exporter {
                     .reset(&span.name, level, keyword, EVENT_TAG_IGNORE_EVENT_TIME);
                 ebw.eb.opcode(Opcode::Stop);
 
-                ebw.add_win32_systemtime(
-                    "end_time",
-                    &span.end_time.into(),
+                ebw.eb.add_filetime(
+                    "otel_event_time",
+                    filetime_from_systemtime!(span.end_time),
+                    OutType::DateTimeUtc,
                     FIELD_TAG_IS_REAL_EVENT_TIME,
                 );
+                ebw.add_win32_systemtime("end_time", &span.end_time.into(), 0);
 
                 win32err = ebw
                     .eb

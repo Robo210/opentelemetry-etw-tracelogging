@@ -7,10 +7,7 @@ const KYLE_KEY: Key = Key::from_static_str("kylesabo.com/foo");
 const SABO_KEY: Key = Key::from_static_str("kylesabo.com/bar");
 
 fn main() {
-    let tracer = opentelemetry_etw_tracelogging::new_pipeline()
-        .with_name("kyle")
-        .with_keyword(2)
-        .install_simple();
+    let tracer = opentelemetry_etw_tracelogging::new_pipeline("kyle").install_simple();
 
     tracer.in_span("doing_work", |cx| {
         std::thread::sleep(std::time::Duration::from_millis(1000));
