@@ -89,7 +89,7 @@ struct Activities {
 }
 
 fn get_activities(name: &str, parent_span_id: &SpanId) -> Activities {
-    let activity_id = Guid::from_name(&name.to_string());
+    let activity_id = Guid::from_name(name);
     let parent_activity_id = if *parent_span_id == SpanId::INVALID {
         None
     } else {
@@ -129,11 +129,14 @@ impl EventBuilderWrapper {
         self
     }
 
-    fn write_events(&mut self, tlg_provider: &Pin<&mut Provider>, level: Level,
+    fn write_events(
+        &mut self,
+        tlg_provider: &Pin<&mut Provider>,
+        level: Level,
         keywords: u64,
         activities: &Activities,
-        events: &mut dyn Iterator<Item = &Event>) -> ExportResult
-    {
+        events: &mut dyn Iterator<Item = &Event>,
+    ) -> ExportResult {
         if tlg_provider.enabled(level, keywords) {
             for event in events {
                 self.eb.reset(
@@ -158,7 +161,7 @@ impl EventBuilderWrapper {
                 );
 
                 let win32err = self.eb.write(
-                    &tlg_provider,
+                    tlg_provider,
                     Some(&activities.activity_id),
                     activities.parent_activity_id.as_ref(),
                 );
@@ -172,6 +175,7 @@ impl EventBuilderWrapper {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_span_event(
         &mut self,
         tlg_provider: &Pin<&mut Provider>,
@@ -197,7 +201,7 @@ impl EventBuilderWrapper {
             (Opcode::Stop, "end_time")
         };
 
-        self.eb.reset(&name, level, keywords, event_tags);
+        self.eb.reset(name, level, keywords, event_tags);
         self.eb.opcode(opcode);
 
         self.eb.add_filetime(
@@ -229,7 +233,7 @@ impl EventBuilderWrapper {
         add_attributes_to_event(self, attributes);
 
         let win32err = self.eb.write(
-            &tlg_provider,
+            tlg_provider,
             Some(&activities.activity_id),
             activities.parent_activity_id.as_ref(),
         );
@@ -259,7 +263,7 @@ impl EventBuilderWrapper {
                     data.name.to_string(),
                     data.start_time,
                     data.parent_span_id,
-                    Some(data.span_kind.clone()),
+                    Some(data.span_kind),
                     false,
                 ),
                 None => (
@@ -274,7 +278,7 @@ impl EventBuilderWrapper {
             let activities =
                 get_activities(&span_context.span_id().to_string(), &parent_activity_id);
 
-            let err = self.write_span_event(
+            self.write_span_event(
                 &tlg_provider,
                 &name,
                 level,
@@ -286,10 +290,7 @@ impl EventBuilderWrapper {
                 &mut std::iter::empty(),
                 true,
                 add_tags,
-            );
-            if err.is_err() {
-                return Err(err.unwrap_err());
-            }
+            )?;
         }
 
         Ok(())
@@ -306,10 +307,12 @@ impl EventBuilderWrapper {
         let tlg_provider = provider.get_provider();
 
         if tlg_provider.enabled(level, keyword) {
-            let activities =
-                get_activities(&span_data.span_context.span_id().to_string(), &span_data.parent_span_id);
+            let activities = get_activities(
+                &span_data.span_context.span_id().to_string(),
+                &span_data.parent_span_id,
+            );
 
-            let mut err = self.write_span_event(
+            self.write_span_event(
                 &tlg_provider,
                 &span_data.name,
                 level,
@@ -321,15 +324,9 @@ impl EventBuilderWrapper {
                 &mut span_data.attributes.iter(),
                 false,
                 false,
-            );
-            if err.is_err() {
-                return Err(err.unwrap_err());
-            }
+            )?;
 
-            err = self.write_events(&tlg_provider, Level::Verbose, event_keywords, &activities, &mut span_data.events.iter());
-            if err.is_err() {
-                return Err(err.unwrap_err());
-            }
+            self.write_events(&tlg_provider, Level::Verbose, event_keywords, &activities, &mut span_data.events.iter())?;
         }
 
         Ok(())
@@ -370,12 +367,18 @@ impl EventBuilderWrapper {
                 true,
             );
             if err.is_err() {
-                return Box::pin(std::future::ready(Err(err.unwrap_err())));
+                return Box::pin(std::future::ready(err));
             }
 
-            err = self.write_events(&tlg_provider, Level::Verbose, event_keywords, &activities, &mut span.events.iter());
+            err = self.write_events(
+                &tlg_provider,
+                Level::Verbose,
+                event_keywords,
+                &activities,
+                &mut span.events.iter(),
+            );
             if err.is_err() {
-                return Box::pin(std::future::ready(Err(err.unwrap_err())));
+                return Box::pin(std::future::ready(err));
             }
 
             err = self.write_span_event(
@@ -392,7 +395,7 @@ impl EventBuilderWrapper {
                 true,
             );
             if err.is_err() {
-                return Box::pin(std::future::ready(Err(err.unwrap_err())));
+                return Box::pin(std::future::ready(err));
             }
         }
 

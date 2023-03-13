@@ -115,7 +115,7 @@ impl EtwExporter for ExporterConfig {
 impl SpanProcessor for RealtimeExporter {
     fn on_start(&self, span: &mut Span, _cx: &Context) {
         let mut config = self.config.lock().unwrap();
-        let _ = self.ebw.lock().unwrap().log_span_start(&mut *config, &span);
+        let _ = self.ebw.lock().unwrap().log_span_start(&mut *config, span);
     }
 
     fn on_end(&self, span: SpanData) {
