@@ -312,6 +312,14 @@ impl EventBuilderWrapper {
                 &span_data.parent_span_id,
             );
 
+            self.write_events(
+                &tlg_provider,
+                Level::Verbose,
+                event_keywords,
+                &activities,
+                &mut span_data.events.iter(),
+            )?;
+
             self.write_span_event(
                 &tlg_provider,
                 &span_data.name,
@@ -324,14 +332,6 @@ impl EventBuilderWrapper {
                 &mut span_data.attributes.iter(),
                 false,
                 false,
-            )?;
-
-            self.write_events(
-                &tlg_provider,
-                Level::Verbose,
-                event_keywords,
-                &activities,
-                &mut span_data.events.iter(),
             )?;
         }
 
