@@ -149,7 +149,7 @@ impl EventBuilderWrapper {
 
                 self.eb.add_filetime(
                     "otel_event_time",
-                    filetime_from_systemtime!(event.timestamp),
+                    win_filetime_from_systemtime!(event.timestamp),
                     OutType::DateTimeUtc,
                     FIELD_TAG_IS_REAL_EVENT_TIME,
                 );
@@ -206,7 +206,7 @@ impl EventBuilderWrapper {
 
         self.eb.add_filetime(
             "otel_event_time",
-            filetime_from_systemtime!(event_time),
+            win_filetime_from_systemtime!(event_time),
             OutType::DateTimeUtc,
             field_tags,
         );
