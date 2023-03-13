@@ -1,28 +1,28 @@
-use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
+use opentelemetry::{sdk::export::trace::SpanData, trace::TraceResult, Context};
 
 use crate::constants::*;
 use crate::etw_exporter::*;
-use futures_util::future::BoxFuture;
 use opentelemetry_api::{global, trace::TracerProvider};
-use std::{fmt::Debug, pin::Pin};
+use opentelemetry_sdk::trace::{Span, SpanProcessor};
+use std::{fmt::Debug, pin::Pin, sync::Mutex};
 use tracelogging_dynamic::*;
 
 #[derive(Debug)]
-pub struct BatchExporterBuilder {
+pub struct RealtimeExporterBuilder {
     provider_name: String,
     provider_id: Guid,
     trace_config: Option<opentelemetry_sdk::trace::Config>,
 }
 
-pub fn new_batch_exporter(name: &str) -> BatchExporterBuilder {
-    BatchExporterBuilder {
+pub fn new_realtime_exporter(name: &str) -> RealtimeExporterBuilder {
+    RealtimeExporterBuilder {
         provider_name: name.to_owned(),
         provider_id: Guid::from_name(name),
         trace_config: None,
     }
 }
 
-impl BatchExporterBuilder {
+impl RealtimeExporterBuilder {
     /// For advanced scenarios.
     /// Assign a provider ID to the ETW provider rather than use
     /// one generated from the provider name.
@@ -38,10 +38,10 @@ impl BatchExporterBuilder {
     }
 
     pub fn install_simple(mut self) -> opentelemetry_sdk::trace::Tracer {
-        let exporter = BatchExporter::new(&self.provider_name);
+        let exporter = RealtimeExporter::new(&self.provider_name);
 
         let mut provider_builder =
-            opentelemetry_sdk::trace::TracerProvider::builder().with_simple_exporter(exporter);
+            opentelemetry_sdk::trace::TracerProvider::builder().with_span_processor(exporter);
 
         if let Some(config) = self.trace_config.take() {
             provider_builder = provider_builder.with_config(config);
@@ -66,12 +66,14 @@ struct ExporterConfig {
     event_keywords: u64,
 }
 
-pub struct BatchExporter {
-    config: ExporterConfig,
-    ebw: EventBuilderWrapper,
+pub struct RealtimeExporter {
+    // Must be boxed because SpanProcessor doesn't use mutable self,
+    // bug EtwExporter and EventBuilder must be mutable.
+    config: Mutex<ExporterConfig>,
+    ebw: Mutex<EventBuilderWrapper>,
 }
 
-impl BatchExporter {
+impl RealtimeExporter {
     pub fn new(provider_name: &str) -> Self {
         let mut provider = Box::pin(Provider::new());
         unsafe {
@@ -79,18 +81,18 @@ impl BatchExporter {
                 .as_mut()
                 .register(provider_name, Provider::options().group_id(&GROUP_ID));
         }
-        BatchExporter {
-            config: ExporterConfig {
+        RealtimeExporter {
+            config: Mutex::new(ExporterConfig {
                 provider,
                 span_keywords: 1,
                 event_keywords: 2,
-            },
-            ebw: EventBuilderWrapper::new(),
+            }),
+            ebw: Mutex::new(EventBuilderWrapper::new()),
         }
     }
 }
 
-impl Debug for BatchExporter {
+impl Debug for RealtimeExporter {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
@@ -110,12 +112,22 @@ impl EtwExporter for ExporterConfig {
     }
 }
 
-impl SpanExporter for BatchExporter {
-    fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
-        for span in batch {
-            self.ebw.log_spandata(&mut self.config, &span);
-        }
+impl SpanProcessor for RealtimeExporter {
+    fn on_start(&self, span: &mut Span, _cx: &Context) {
+        let mut config = self.config.lock().unwrap();
+        let _ = self.ebw.lock().unwrap().log_span_start(&mut *config, &span);
+    }
 
-        Box::pin(std::future::ready(Ok(())))
+    fn on_end(&self, span: SpanData) {
+        let mut config = self.config.lock().unwrap();
+        let _ = self.ebw.lock().unwrap().log_span_end(&mut *config, &span);
+    }
+
+    fn force_flush(&self) -> TraceResult<()> {
+        Ok(())
+    }
+
+    fn shutdown(&mut self) -> TraceResult<()> {
+        Ok(())
     }
 }
