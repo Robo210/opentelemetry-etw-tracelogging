@@ -326,7 +326,13 @@ impl EventBuilderWrapper {
                 false,
             )?;
 
-            self.write_events(&tlg_provider, Level::Verbose, event_keywords, &activities, &mut span_data.events.iter())?;
+            self.write_events(
+                &tlg_provider,
+                Level::Verbose,
+                event_keywords,
+                &activities,
+                &mut span_data.events.iter(),
+            )?;
         }
 
         Ok(())
