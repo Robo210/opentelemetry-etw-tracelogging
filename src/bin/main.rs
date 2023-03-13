@@ -2,12 +2,13 @@ use opentelemetry::trace::TraceContextExt;
 use opentelemetry::Key;
 use opentelemetry_api::global::shutdown_tracer_provider;
 use opentelemetry_api::trace::{Span, Tracer};
+use opentelemetry_etw_tracelogging::span_exporter as otel_etw;
 
 const KYLE_KEY: Key = Key::from_static_str("kylesabo.com/foo");
 const SABO_KEY: Key = Key::from_static_str("kylesabo.com/bar");
 
 fn main() {
-    let tracer = opentelemetry_etw_tracelogging::new_pipeline("kyle").install_simple();
+    let tracer = otel_etw::new_pipeline("kyle").install_simple();
 
     tracer.in_span("doing_work", |cx| {
         std::thread::sleep(std::time::Duration::from_millis(1000));
