@@ -44,6 +44,13 @@
 //! Span start events may be incomplete compared to those from the
 //! batch exporter. Attributes and other data is only guaranteed
 //! to be present on span end events.
+//! 
+//! # Sampling and Batching
+//! 
+//! Every span that is exported is logged immediately as an ETW event.
+//! Batching of events is handled by the ETW collector's session configuration.
+//! ETW events are logged with non-zero keywords and level, allowing
+//! collectors to individually filter events as desired.
 //!
 //! # Examples
 //!
@@ -52,7 +59,7 @@
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
 //!
-//! let tracer = opentelemetry_etw_tracelogging::span_exporter::new_batch_exporter("MyEtwProviderName")
+//! let tracer = opentelemetry_etw_tracelogging::span_exporter::new_etw_exporter("MyEtwProviderName")
 //!     .install_simple();
 //!
 //! tracer.in_span("doing_work", |cx| {
@@ -67,8 +74,8 @@
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
 //!
-//! let tracer = opentelemetry_etw_tracelogging::span_exporter::new_realtime_exporter("MyEtwProviderName")
-//!     .install_simple();
+//! let tracer = opentelemetry_etw_tracelogging::span_exporter::new_etw_exporter("MyEtwProviderName")
+//!     .install_realtime();
 //!
 //! tracer.in_span("doing_work", |cx| {
 //!     // Traced app logic here...
@@ -81,9 +88,11 @@ mod constants;
 mod error;
 mod etw_exporter;
 mod realtime_exporter;
+mod builder;
 
 pub mod span_exporter {
     pub use crate::batch_exporter::*;
     pub use crate::constants::*;
     pub use crate::realtime_exporter::*;
+    pub use crate::builder::*;
 }

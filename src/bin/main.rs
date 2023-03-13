@@ -8,7 +8,7 @@ const KYLE_KEY: Key = Key::from_static_str("kylesabo.com/foo");
 const SABO_KEY: Key = Key::from_static_str("kylesabo.com/bar");
 
 fn main() {
-    let tracer = otel_etw::span_exporter::new_batch_exporter("kyle").install_simple();
+    let tracer = otel_etw::span_exporter::new_etw_exporter("kyle").install_simple();
 
     tracer.in_span("doing_work", |cx| {
         std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -35,7 +35,7 @@ fn main() {
 
     std::thread::sleep(std::time::Duration::from_millis(1000));
 
-    let tracer2 = otel_etw::span_exporter::new_realtime_exporter("kyle").install_simple();
+    let tracer2 = otel_etw::span_exporter::new_etw_exporter("kyle").install_realtime();
 
     tracer2.in_span("doing_realtime_work", |cx| {
         std::thread::sleep(std::time::Duration::from_millis(1000));

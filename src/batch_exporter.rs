@@ -1,64 +1,9 @@
-use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
-
 use crate::constants::*;
 use crate::etw_exporter::*;
 use futures_util::future::BoxFuture;
-use opentelemetry_api::{global, trace::TracerProvider};
+use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
 use std::{fmt::Debug, pin::Pin};
 use tracelogging_dynamic::*;
-
-#[derive(Debug)]
-pub struct BatchExporterBuilder {
-    provider_name: String,
-    provider_id: Guid,
-    trace_config: Option<opentelemetry_sdk::trace::Config>,
-}
-
-pub fn new_batch_exporter(name: &str) -> BatchExporterBuilder {
-    BatchExporterBuilder {
-        provider_name: name.to_owned(),
-        provider_id: Guid::from_name(name),
-        trace_config: None,
-    }
-}
-
-impl BatchExporterBuilder {
-    /// For advanced scenarios.
-    /// Assign a provider ID to the ETW provider rather than use
-    /// one generated from the provider name.
-    pub fn with_provider_id(mut self, guid: &Guid) -> Self {
-        self.provider_id = guid.to_owned();
-        self
-    }
-
-    /// Assign the SDK trace configuration.
-    pub fn with_trace_config(mut self, config: opentelemetry_sdk::trace::Config) -> Self {
-        self.trace_config = Some(config);
-        self
-    }
-
-    pub fn install_simple(mut self) -> opentelemetry_sdk::trace::Tracer {
-        let exporter = BatchExporter::new(&self.provider_name);
-
-        let mut provider_builder =
-            opentelemetry_sdk::trace::TracerProvider::builder().with_simple_exporter(exporter);
-
-        if let Some(config) = self.trace_config.take() {
-            provider_builder = provider_builder.with_config(config);
-        }
-
-        let provider = provider_builder.build();
-
-        let tracer = provider.versioned_tracer(
-            "opentelemetry-tracelogging",
-            Some(env!("CARGO_PKG_VERSION")),
-            None,
-        );
-        let _ = global::set_tracer_provider(provider);
-
-        tracer
-    }
-}
 
 struct ExporterConfig {
     provider: Pin<Box<Provider>>,
