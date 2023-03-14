@@ -4,6 +4,7 @@ use crate::constants::*;
 use crate::error::*;
 use chrono::{Datelike, Timelike};
 use futures_util::future::BoxFuture;
+use opentelemetry::Array;
 use opentelemetry::trace::Event;
 use opentelemetry::{
     trace::{SpanId, SpanKind, Status, TraceError},
@@ -23,6 +24,7 @@ fn add_attributes_to_event(
     attribs: &mut dyn Iterator<Item = (&Key, &Value)>,
 ) {
     for attrib in attribs {
+        let field_name = &attrib.0.to_string();
         match attrib.1 {
             Value::Bool(b) => {
                 eb.add_bool32(
@@ -33,16 +35,29 @@ fn add_attributes_to_event(
                 );
             }
             Value::I64(i) => {
-                eb.add_i64(&attrib.0.to_string(), *i, OutType::Signed, 0);
+                eb.add_i64(field_name, *i, OutType::Signed, 0);
             }
             Value::F64(f) => {
-                eb.add_f64(&attrib.0.to_string(), *f, OutType::Signed, 0);
+                eb.add_f64(field_name, *f, OutType::Signed, 0);
             }
             Value::String(s) => {
-                eb.add_str8(&attrib.0.to_string(), &s.to_string(), OutType::Utf8, 0);
+                eb.add_str8(field_name, &s.to_string(), OutType::Utf8, 0);
             }
-            Value::Array(_) => {
-                panic!("go away");
+            Value::Array(array) => {
+                match array {
+                    Array::Bool(_v) => {
+                        panic!("eb.add_bool32_sequence isn't really useable");
+                    }
+                    Array::I64(v) => {
+                        eb.add_i64_sequence(field_name, v.iter(), OutType::Signed, 0);
+                    }
+                    Array::F64(v) => {
+                        eb.add_f64_sequence(field_name, v.iter(), OutType::Signed, 0);
+                    }
+                    Array::String(v) => {
+                        eb.add_str8_sequence(field_name, v.iter().map(|s| { s.to_string() }), OutType::Utf8, 0);
+                    }
+                }
             }
         }
     }

@@ -45,12 +45,10 @@
 //! batch exporter. Attributes and other data is only guaranteed
 //! to be present on span end events.
 //! 
-//! # Sampling and Batching
+//! # Batching
 //! 
-//! Every span that is exported is logged immediately as an ETW event.
-//! Batching of events is handled by the ETW collector's session configuration.
-//! ETW events are logged with non-zero keywords and level, allowing
-//! collectors to individually filter events as desired.
+//! Every span that is exported is logged synchronously as an ETW event.
+//! Batching or asynchronous logging is not implemented by the exporter.
 //!
 //! # Examples
 //!
