@@ -1,65 +1,21 @@
-use std::{pin::Pin, time::SystemTime};
 use crate::constants::*;
 use crate::error::*;
 use chrono::{Datelike, Timelike};
 use futures_util::future::BoxFuture;
-use opentelemetry::Array;
 use opentelemetry::trace::Event;
+use opentelemetry::Array;
 use opentelemetry::{
     trace::{SpanId, SpanKind, Status, TraceError},
     Key, Value,
 };
 use opentelemetry_sdk::export::trace::{ExportResult, SpanData};
+use std::{pin::Pin, time::SystemTime};
 use tracelogging_dynamic::*;
 
 pub trait EtwExporter {
     fn get_provider(&mut self) -> Pin<&mut Provider>;
     fn get_span_keywords(&self) -> u64;
     fn get_event_keywords(&self) -> u64;
-}
-
-fn add_attributes_to_event(
-    eb: &mut EventBuilder,
-    attribs: &mut dyn Iterator<Item = (&Key, &Value)>,
-) {
-    for attrib in attribs {
-        let field_name = &attrib.0.to_string();
-        match attrib.1 {
-            Value::Bool(b) => {
-                eb.add_bool32(
-                    &attrib.0.to_string(),
-                    b.to_owned().into(),
-                    OutType::Boolean,
-                    0,
-                );
-            }
-            Value::I64(i) => {
-                eb.add_i64(field_name, *i, OutType::Signed, 0);
-            }
-            Value::F64(f) => {
-                eb.add_f64(field_name, *f, OutType::Signed, 0);
-            }
-            Value::String(s) => {
-                eb.add_str8(field_name, &s.to_string(), OutType::Utf8, 0);
-            }
-            Value::Array(array) => {
-                match array {
-                    Array::Bool(v) => {
-                        eb.add_bool32_sequence(field_name, v.iter().map(|b| if *b { &1i32 } else { &0i32 }), OutType::Boolean, 0);
-                    }
-                    Array::I64(v) => {
-                        eb.add_i64_sequence(field_name, v.iter(), OutType::Signed, 0);
-                    }
-                    Array::F64(v) => {
-                        eb.add_f64_sequence(field_name, v.iter(), OutType::Signed, 0);
-                    }
-                    Array::String(v) => {
-                        eb.add_str8_sequence(field_name, v.iter().map(|s| { s.to_string() }), OutType::Utf8, 0);
-                    }
-                }
-            }
-        }
-    }
 }
 
 struct Win32SystemTime {
@@ -143,6 +99,55 @@ impl EventBuilderWrapper {
         self
     }
 
+    fn add_attributes_to_event(&mut self, attribs: &mut dyn Iterator<Item = (&Key, &Value)>) {
+        for attrib in attribs {
+            let field_name = &attrib.0.to_string();
+            match attrib.1 {
+                Value::Bool(b) => {
+                    self.add_bool32(
+                        &attrib.0.to_string(),
+                        b.to_owned().into(),
+                        OutType::Boolean,
+                        0,
+                    );
+                }
+                Value::I64(i) => {
+                    self.add_i64(field_name, *i, OutType::Signed, 0);
+                }
+                Value::F64(f) => {
+                    self.add_f64(field_name, *f, OutType::Signed, 0);
+                }
+                Value::String(s) => {
+                    self.add_str8(field_name, &s.to_string(), OutType::Utf8, 0);
+                }
+                Value::Array(array) => match array {
+                    Array::Bool(v) => {
+                        self.add_bool32_sequence(
+                            field_name,
+                            v.iter().map(|b| if *b { &1i32 } else { &0i32 }),
+                            OutType::Boolean,
+                            0,
+                        );
+                    }
+                    Array::I64(v) => {
+                        self.add_i64_sequence(field_name, v.iter(), OutType::Signed, 0);
+                    }
+                    Array::F64(v) => {
+                        self.add_f64_sequence(field_name, v.iter(), OutType::Signed, 0);
+                    }
+                    Array::String(v) => {
+                        self.add_str8_sequence(
+                            field_name,
+                            v.iter().map(|s| s.to_string()),
+                            OutType::Utf8,
+                            0,
+                        );
+                    }
+                },
+            }
+        }
+    }
+
     fn write_events(
         &mut self,
         tlg_provider: &Pin<&mut Provider>,
@@ -169,8 +174,7 @@ impl EventBuilderWrapper {
                 );
                 self.add_win32_systemtime("time", &event.timestamp.into(), 0);
 
-                add_attributes_to_event(
-                    self,
+                self.add_attributes_to_event(
                     &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
                 );
 
@@ -244,7 +248,7 @@ impl EventBuilderWrapper {
             self.add_string("error", description.to_string(), 0);
         };
 
-        add_attributes_to_event(self, attributes);
+        self.add_attributes_to_event(attributes);
 
         let win32err = self.eb.write(
             tlg_provider,
@@ -433,5 +437,45 @@ impl std::ops::Deref for EventBuilderWrapper {
 impl std::ops::DerefMut for EventBuilderWrapper {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.eb
+    }
+}
+
+#[allow(dead_code)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    use opentelemetry::{Key, StringValue};
+
+    const TEST_KEY_STR: Key = Key::from_static_str("str");
+    const TEST_KEY_BOOL: Key = Key::from_static_str("bool");
+    const TEST_KEY_INT: Key = Key::from_static_str("int");
+    const TEST_KEY_FLOAT: Key = Key::from_static_str("float");
+
+    #[test]
+    fn add_attributes() {
+        let mut ebw = EventBuilderWrapper::new();
+
+        let attribs = vec![
+            TEST_KEY_STR.string("is cool"),
+            TEST_KEY_BOOL.bool(false),
+            TEST_KEY_INT.i64(5),
+            TEST_KEY_FLOAT.f64(7.1),
+        ];
+
+        ebw.add_attributes_to_event(&mut attribs.iter().map(|kv| (&kv.key, &kv.value)));
+    }
+
+    #[test]
+    fn add_attribute_sequences() {
+        let mut ebw = EventBuilderWrapper::new();
+
+        let attribs = vec![
+            TEST_KEY_STR.array(vec![StringValue::from("is cool")]),
+            TEST_KEY_BOOL.array(vec![false, true, false]),
+            TEST_KEY_INT.array(vec![5, 6, 7]),
+            TEST_KEY_FLOAT.array(vec![7.1, 0.9, -1.3]),
+        ];
+
+        ebw.add_attributes_to_event(&mut attribs.iter().map(|kv| (&kv.key, &kv.value)));
     }
 }

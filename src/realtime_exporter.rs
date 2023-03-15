@@ -1,10 +1,9 @@
 use crate::constants::*;
 use crate::etw_exporter::*;
-use opentelemetry_sdk::{trace::SpanProcessor, export::trace::SpanData};
 use opentelemetry::{trace::TraceResult, Context};
+use opentelemetry_sdk::{export::trace::SpanData, trace::SpanProcessor};
 use std::{fmt::Debug, pin::Pin, sync::Mutex};
 use tracelogging_dynamic::*;
-
 
 struct ExporterConfig {
     provider: Pin<Box<Provider>>,

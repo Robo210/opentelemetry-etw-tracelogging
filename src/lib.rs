@@ -21,9 +21,9 @@
 //! to the span are logged with keyword 2 and ['Level::Verbose`].
 //!
 //! # ETW Timestamps
-//! 
+//!
 //! ## Batch Exporter
-//! 
+//!
 //! Spans are exported asynchronously and in batches.
 //! Because of this, the timestamps on the ETW events
 //! do not represent the time the span was originally
@@ -33,20 +33,20 @@
 //! the timestamp on the EVENT_RECORD should be ignored when
 //! processing the event. To get the real time of the event,
 //! look for a field tagged with FIELD_TAG_IS_REAL_EVENT_TIME.
-//! 
+//!
 //! ## Realtime Exporter
-//! 
+//!
 //! ETW events for span start and stop will be logged in near-realtime.
 //! Events attached to the span are logged as part of the span end,
 //! and their ETW timestamps should be processed as described in the
 //! Batch Exporter section.
-//! 
+//!
 //! Span start events may be incomplete compared to those from the
 //! batch exporter. Attributes and other data is only guaranteed
 //! to be present on span end events.
-//! 
+//!
 //! # Batching
-//! 
+//!
 //! Every span that is exported is logged synchronously as an ETW event.
 //! Batching or asynchronous logging is not implemented by the exporter.
 //!
@@ -66,7 +66,7 @@
 //!
 //! shutdown_tracer_provider(); // sending remaining spans
 //! ```
-//! 
+//!
 //! ## Realtime Exporter
 //! ```no_run
 //! use opentelemetry_api::global::shutdown_tracer_provider;
@@ -82,15 +82,15 @@
 //! shutdown_tracer_provider(); // sending remaining spans
 //! ```
 mod batch_exporter;
+mod builder;
 mod constants;
 mod error;
 mod etw_exporter;
 mod realtime_exporter;
-mod builder;
 
 pub mod span_exporter {
     pub use crate::batch_exporter::*;
+    pub use crate::builder::*;
     pub use crate::constants::*;
     pub use crate::realtime_exporter::*;
-    pub use crate::builder::*;
 }

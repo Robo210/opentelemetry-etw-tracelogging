@@ -1,7 +1,7 @@
-use opentelemetry_api::{global, trace::TracerProvider};
-use opentelemetry_sdk::trace::Builder;
 use crate::batch_exporter::*;
 use crate::realtime_exporter::*;
+use opentelemetry_api::{global, trace::TracerProvider};
+use opentelemetry_sdk::trace::Builder;
 use tracelogging_dynamic::Guid;
 
 #[derive(Debug)]
@@ -62,21 +62,16 @@ impl EtwExporterBuilder {
     }
 
     fn install(mut self, provider_builder: Builder) -> opentelemetry_sdk::trace::Tracer {
-        let builder =
-            if let Some(config) = self.trace_config.take() {
-                provider_builder.with_config(config)
-            }
-            else {
-                provider_builder
-            };
+        let builder = if let Some(config) = self.trace_config.take() {
+            provider_builder.with_config(config)
+        } else {
+            provider_builder
+        };
 
         let provider = builder.build();
 
-        let tracer = provider.versioned_tracer(
-            "opentelemetry-etw",
-            Some(env!("CARGO_PKG_VERSION")),
-            None,
-        );
+        let tracer =
+            provider.versioned_tracer("opentelemetry-etw", Some(env!("CARGO_PKG_VERSION")), None);
         let _ = global::set_tracer_provider(provider);
 
         tracer
