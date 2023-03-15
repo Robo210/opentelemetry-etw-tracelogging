@@ -34,6 +34,10 @@ impl EtwExporterBuilder {
         self
     }
 
+    /// Install the exporter as a "simple" span exporter.
+    /// Spans will be automatically batched and exported some time after
+    /// the span has ended. The timestamps of the ETW events, and the
+    /// duration of time between events, will not be accurate.
     pub fn install_simple(self) -> opentelemetry_sdk::trace::Tracer {
         let exporter = BatchExporter::new(&self.provider_name);
 
@@ -43,6 +47,11 @@ impl EtwExporterBuilder {
         self.install(provider_builder)
     }
 
+    /// Install the exporter as a span processor.
+    /// Spans will be exported almost immediately after they are started
+    /// and ended. Events that were added to the span will be exported
+    /// at the same time as the end event. The timestamps of the start
+    /// and end ETW events will roughly match the actual start and end of the span.
     pub fn install_realtime(self) -> opentelemetry_sdk::trace::Tracer {
         let exporter = RealtimeExporter::new(&self.provider_name);
 
@@ -64,7 +73,7 @@ impl EtwExporterBuilder {
         let provider = builder.build();
 
         let tracer = provider.versioned_tracer(
-            "opentelemetry-tracelogging",
+            "opentelemetry-etw",
             Some(env!("CARGO_PKG_VERSION")),
             None,
         );

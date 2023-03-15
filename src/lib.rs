@@ -57,7 +57,7 @@
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
 //!
-//! let tracer = opentelemetry_etw_tracelogging::span_exporter::new_etw_exporter("MyEtwProviderName")
+//! let tracer = opentelemetry_etw::span_exporter::new_etw_exporter("MyEtwProviderName")
 //!     .install_simple();
 //!
 //! tracer.in_span("doing_work", |cx| {
@@ -72,7 +72,7 @@
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
 //!
-//! let tracer = opentelemetry_etw_tracelogging::span_exporter::new_etw_exporter("MyEtwProviderName")
+//! let tracer = opentelemetry_etw::span_exporter::new_etw_exporter("MyEtwProviderName")
 //!     .install_realtime();
 //!
 //! tracer.in_span("doing_work", |cx| {

@@ -1,6 +1,5 @@
 use crate::constants::*;
 use crate::etw_exporter::*;
-//use opentelemetry_api::{global, trace::TracerProvider};
 use opentelemetry_sdk::{trace::SpanProcessor, export::trace::SpanData};
 use opentelemetry::{trace::TraceResult, Context};
 use std::{fmt::Debug, pin::Pin, sync::Mutex};

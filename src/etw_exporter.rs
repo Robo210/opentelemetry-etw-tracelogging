@@ -1,5 +1,4 @@
 use std::{pin::Pin, time::SystemTime};
-
 use crate::constants::*;
 use crate::error::*;
 use chrono::{Datelike, Timelike};
@@ -45,8 +44,8 @@ fn add_attributes_to_event(
             }
             Value::Array(array) => {
                 match array {
-                    Array::Bool(_v) => {
-                        panic!("eb.add_bool32_sequence isn't really useable");
+                    Array::Bool(v) => {
+                        eb.add_bool32_sequence(field_name, v.iter().map(|b| if *b { &1i32 } else { &0i32 }), OutType::Boolean, 0);
                     }
                     Array::I64(v) => {
                         eb.add_i64_sequence(field_name, v.iter(), OutType::Signed, 0);
