@@ -64,3 +64,13 @@ impl SpanExporter for BatchExporter {
         Box::pin(std::future::ready(Ok(())))
     }
 }
+
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_batch_exporter() {
+        let _ = BatchExporter::new("my_provider_name");
+    }
+}

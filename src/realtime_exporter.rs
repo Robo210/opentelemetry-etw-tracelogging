@@ -13,7 +13,7 @@ struct ExporterConfig {
 
 pub struct RealtimeExporter {
     // Must be boxed because SpanProcessor doesn't use mutable self,
-    // bug EtwExporter and EventBuilder must be mutable.
+    // but EtwExporter and EventBuilder must be mutable.
     config: Mutex<ExporterConfig>,
     ebw: Mutex<EventBuilderWrapper>,
 }
@@ -74,5 +74,15 @@ impl SpanProcessor for RealtimeExporter {
 
     fn shutdown(&mut self) -> TraceResult<()> {
         Ok(())
+    }
+}
+
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_realtime_exporter() {
+        let _ = RealtimeExporter::new("my_provider_name");
     }
 }

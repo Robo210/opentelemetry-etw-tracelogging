@@ -23,9 +23,13 @@ impl EtwExporterBuilder {
     /// For advanced scenarios.
     /// Assign a provider ID to the ETW provider rather than use
     /// one generated from the provider name.
-    pub fn with_provider_id(mut self, guid: &Guid) -> Self {
-        self.provider_id = guid.to_owned();
+    pub fn with_provider_id(mut self, guid: Guid) -> Self {
+        self.provider_id = guid;
         self
+    }
+
+    pub fn get_provider_id(&self) -> Guid {
+        self.provider_id
     }
 
     /// Assign the SDK trace configuration.
@@ -75,5 +79,29 @@ impl EtwExporterBuilder {
         let _ = global::set_tracer_provider(provider);
 
         tracer
+    }
+}
+
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_builder() {
+        let builder = new_etw_exporter("my_provider_name");
+        assert!(builder.get_provider_id() == Guid::from_fields(0x6386e494, 0x0d79, 0x57b7, [0xa8, 0x38, 0x16, 0x8d, 0xc4, 0x19, 0xf5, 0x42]));
+
+        let builder = builder.with_provider_id(Guid::from_fields(0x1fa0f771, 0x9607, 0x4fe2, [0x8c, 0x39, 0x2b, 0x6c, 0x61, 0x43, 0xbb, 0x87]));
+        assert!(builder.get_provider_id() == Guid::from_fields(0x1fa0f771, 0x9607, 0x4fe2, [0x8c, 0x39, 0x2b, 0x6c, 0x61, 0x43, 0xbb, 0x87]));
+    }
+
+    #[test]
+    fn install_simple() {
+        new_etw_exporter("my_provider_name").install_simple();
+    }
+
+    #[test]
+    fn install_realtime() {
+        new_etw_exporter("my_provider_name").install_realtime();
     }
 }
