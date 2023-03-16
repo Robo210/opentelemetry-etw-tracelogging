@@ -4,6 +4,7 @@ use chrono::{Datelike, Timelike};
 use futures_util::future::BoxFuture;
 use opentelemetry::trace::Event;
 use opentelemetry::Array;
+use opentelemetry::trace::TraceId;
 use opentelemetry::{
     trace::{SpanId, SpanKind, Status, TraceError},
     Key, Value,
@@ -55,21 +56,29 @@ impl EventBuilderWrapper {
 }
 
 struct Activities {
+    span_id: String,
     activity_id: Guid,
     parent_activity_id: Option<Guid>,
+    parent_span_id: String,
+    trace_id_name: String,
 }
 
-fn get_activities(name: &str, parent_span_id: &SpanId) -> Activities {
-    let activity_id = Guid::from_name(name);
-    let parent_activity_id = if *parent_span_id == SpanId::INVALID {
-        None
+fn get_activities(span_id: &SpanId, parent_span_id: &SpanId, trace_id: &TraceId) -> Activities {
+    let name = span_id.to_string();
+    let activity_id = Guid::from_name(&name);
+    let (parent_activity_id, parent_span_name) = if *parent_span_id == SpanId::INVALID {
+        (None, String::default())
     } else {
-        Some(Guid::from_name(&parent_span_id.to_string()))
+        let parent_span_name = parent_span_id.to_string();
+        (Some(Guid::from_name(&parent_span_name)), parent_span_name)
     };
 
     Activities {
+        span_id: name,
         activity_id,
         parent_activity_id,
+        parent_span_id: parent_span_name,
+        trace_id_name: trace_id.to_string(),
     }
 }
 
@@ -175,15 +184,15 @@ impl EventBuilderWrapper {
     ) -> ExportResult {
         if tlg_provider.enabled(level, keywords) {
             for event in events {
-                self.eb.reset(
+                self.reset(
                     &event.name,
                     Level::Verbose,
                     keywords,
                     EVENT_TAG_IGNORE_EVENT_TIME,
                 );
-                self.eb.opcode(Opcode::Info);
+                self.opcode(Opcode::Info);
 
-                self.eb.add_filetime(
+                self.add_filetime(
                     "otel_event_time",
                     win_filetime_from_systemtime!(event.timestamp),
                     OutType::DateTimeUtc,
@@ -191,11 +200,19 @@ impl EventBuilderWrapper {
                 );
                 self.add_win32_systemtime("time", &event.timestamp.into(), 0);
 
+                self.add_str8("SpanId", &activities.span_id, OutType::Utf8, 0);
+
+                if !activities.parent_span_id.is_empty() {
+                    self.add_str8("ParentId", &activities.parent_span_id, OutType::Utf8, 0);
+                }
+
+                self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
+
                 self.add_attributes_to_event(
                     &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)), use_byte_for_bools
                 );
 
-                let win32err = self.eb.write(
+                let win32err = self.write(
                     tlg_provider,
                     Some(&activities.activity_id),
                     activities.parent_activity_id.as_ref(),
@@ -237,10 +254,10 @@ impl EventBuilderWrapper {
             (Opcode::Stop, "EndTime")
         };
 
-        self.eb.reset(name, level, keywords, event_tags);
-        self.eb.opcode(opcode);
+        self.reset(name, level, keywords, event_tags);
+        self.opcode(opcode);
 
-        self.eb.add_filetime(
+        self.add_filetime(
             "otel_event_time",
             win_filetime_from_systemtime!(event_time),
             OutType::DateTimeUtc,
@@ -266,9 +283,17 @@ impl EventBuilderWrapper {
             self.add_string("StatusMessage", description.to_string(), 0);
         };
 
+        self.add_str8("SpanId", &activities.span_id, OutType::Utf8, 0);
+
+        if !activities.parent_span_id.is_empty() {
+            self.add_str8("ParentId", &activities.parent_span_id, OutType::Utf8, 0);
+        }
+
+        self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
+
         self.add_attributes_to_event(attributes, use_byte_for_bools);
 
-        let win32err = self.eb.write(
+        let win32err = self.write(
             tlg_provider,
             Some(&activities.activity_id),
             activities.parent_activity_id.as_ref(),
@@ -317,7 +342,7 @@ impl EventBuilderWrapper {
             };
 
             let activities =
-                get_activities(&span_context.span_id().to_string(), &parent_activity_id);
+                get_activities(&span_context.span_id(), &parent_activity_id, &span_context.trace_id());
 
             self.write_span_event(
                 &tlg_provider,
@@ -355,8 +380,9 @@ impl EventBuilderWrapper {
 
         if tlg_provider.enabled(level, keyword) {
             let activities = get_activities(
-                &span_data.span_context.span_id().to_string(),
+                &span_data.span_context.span_id(),
                 &span_data.parent_span_id,
+                &span_data.span_context.trace_id(),
             );
 
             self.write_events(
@@ -408,8 +434,9 @@ impl EventBuilderWrapper {
         };
 
         let activities = get_activities(
-            &span.span_context.span_id().to_string(),
+            &span.span_context.span_id(),
             &span.parent_span_id,
+            &span.span_context.trace_id(),
         );
 
         if tlg_provider.enabled(level, keyword) {

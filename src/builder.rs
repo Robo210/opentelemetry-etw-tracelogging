@@ -40,7 +40,7 @@ impl EtwExporterBuilder {
     /// Log bool attributes using an InType of `xs:byte` instead of `win:Boolean`.
     /// This is non-standard and not recommended except if compatability with the
     /// C++ ETW exporter is required.
-    pub fn with_bool8(mut self) -> Self {
+    pub fn with_byte_sized_bools(mut self) -> Self {
         self.use_byte_for_bools = true;
         self
     }
