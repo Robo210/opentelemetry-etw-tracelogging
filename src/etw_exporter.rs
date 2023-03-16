@@ -16,6 +16,7 @@ pub trait EtwExporter {
     fn get_provider(&mut self) -> Pin<&mut Provider>;
     fn get_span_keywords(&self) -> u64;
     fn get_event_keywords(&self) -> u64;
+    fn get_bool_representation(&self) -> InType;
 }
 
 struct Win32SystemTime {
@@ -99,17 +100,22 @@ impl EventBuilderWrapper {
         self
     }
 
-    fn add_attributes_to_event(&mut self, attribs: &mut dyn Iterator<Item = (&Key, &Value)>) {
+    fn add_attributes_to_event(&mut self, attribs: &mut dyn Iterator<Item = (&Key, &Value)>, use_byte_for_bools: bool) {
         for attrib in attribs {
             let field_name = &attrib.0.to_string();
             match attrib.1 {
                 Value::Bool(b) => {
-                    self.add_bool32(
-                        &attrib.0.to_string(),
-                        b.to_owned().into(),
-                        OutType::Boolean,
-                        0,
-                    );
+                    if use_byte_for_bools {
+                        self.add_u8(field_name, *b as u8, OutType::Boolean, 0);
+                    }
+                    else {
+                        self.add_bool32(
+                            field_name,
+                            *b as i32,
+                            OutType::Boolean,
+                            0,
+                        );
+                    }
                 }
                 Value::I64(i) => {
                     self.add_i64(field_name, *i, OutType::Signed, 0);
@@ -122,12 +128,22 @@ impl EventBuilderWrapper {
                 }
                 Value::Array(array) => match array {
                     Array::Bool(v) => {
-                        self.add_bool32_sequence(
-                            field_name,
-                            v.iter().map(|b| if *b { &1i32 } else { &0i32 }),
-                            OutType::Boolean,
-                            0,
-                        );
+                        if use_byte_for_bools {
+                            self.add_u8_sequence(
+                                field_name,
+                                v.iter().map(|b| if *b { &1u8 } else { &0u8 }),
+                                OutType::Boolean,
+                                0,
+                            );
+                        }
+                        else {
+                            self.add_bool32_sequence(
+                                field_name,
+                                v.iter().map(|b| if *b { &1i32 } else { &0i32 }),
+                                OutType::Boolean,
+                                0,
+                            );
+                        }
                     }
                     Array::I64(v) => {
                         self.add_i64_sequence(field_name, v.iter(), OutType::Signed, 0);
@@ -155,6 +171,7 @@ impl EventBuilderWrapper {
         keywords: u64,
         activities: &Activities,
         events: &mut dyn Iterator<Item = &Event>,
+        use_byte_for_bools: bool,
     ) -> ExportResult {
         if tlg_provider.enabled(level, keywords) {
             for event in events {
@@ -175,7 +192,7 @@ impl EventBuilderWrapper {
                 self.add_win32_systemtime("time", &event.timestamp.into(), 0);
 
                 self.add_attributes_to_event(
-                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)), use_byte_for_bools
                 );
 
                 let win32err = self.eb.write(
@@ -207,6 +224,7 @@ impl EventBuilderWrapper {
         attributes: &mut dyn Iterator<Item = (&Key, &Value)>,
         is_start: bool,
         add_tags: bool,
+        use_byte_for_bools: bool,
     ) -> ExportResult {
         let (event_tags, field_tags) = if add_tags {
             (EVENT_TAG_IGNORE_EVENT_TIME, FIELD_TAG_IS_REAL_EVENT_TIME)
@@ -214,9 +232,9 @@ impl EventBuilderWrapper {
             (0, 0)
         };
         let (opcode, event_name) = if is_start {
-            (Opcode::Start, "start_time")
+            (Opcode::Start, "StartTime")
         } else {
-            (Opcode::Stop, "end_time")
+            (Opcode::Stop, "EndTime")
         };
 
         self.eb.reset(name, level, keywords, event_tags);
@@ -232,7 +250,7 @@ impl EventBuilderWrapper {
 
         if let Some(sk) = span_kind {
             self.add_string(
-                "span_kind",
+                "Kind",
                 match sk {
                     SpanKind::Client => "Client",
                     SpanKind::Server => "Server",
@@ -245,10 +263,10 @@ impl EventBuilderWrapper {
         }
 
         if let Status::Error { description } = &status {
-            self.add_string("error", description.to_string(), 0);
+            self.add_string("StatusMessage", description.to_string(), 0);
         };
 
-        self.add_attributes_to_event(attributes);
+        self.add_attributes_to_event(attributes, use_byte_for_bools);
 
         let win32err = self.eb.write(
             tlg_provider,
@@ -269,6 +287,11 @@ impl EventBuilderWrapper {
         span: &opentelemetry::sdk::trace::Span,
     ) -> ExportResult {
         let span_keywords = provider.get_span_keywords();
+        let use_byte_for_bools = match provider.get_bool_representation() {
+            InType::U8 => true,
+            InType::Bool32 => false,
+            _ => panic!("unsupported bool reprsentation")
+        };
         let (level, keyword) = (Level::Informational, span_keywords);
         let tlg_provider = provider.get_provider();
 
@@ -308,6 +331,7 @@ impl EventBuilderWrapper {
                 &mut std::iter::empty(),
                 true,
                 add_tags,
+                use_byte_for_bools,
             )?;
         }
 
@@ -321,6 +345,11 @@ impl EventBuilderWrapper {
     ) -> ExportResult {
         let span_keywords = provider.get_span_keywords();
         let event_keywords = provider.get_event_keywords();
+        let use_byte_for_bools = match provider.get_bool_representation() {
+            InType::U8 => true,
+            InType::Bool32 => false,
+            _ => panic!("unsupported bool reprsentation")
+        };
         let (level, keyword) = (Level::Informational, span_keywords);
         let tlg_provider = provider.get_provider();
 
@@ -336,6 +365,7 @@ impl EventBuilderWrapper {
                 event_keywords,
                 &activities,
                 &mut span_data.events.iter(),
+                use_byte_for_bools,
             )?;
 
             self.write_span_event(
@@ -350,6 +380,7 @@ impl EventBuilderWrapper {
                 &mut span_data.attributes.iter(),
                 false,
                 false,
+                use_byte_for_bools,
             )?;
         }
 
@@ -363,6 +394,11 @@ impl EventBuilderWrapper {
     ) -> BoxFuture<'static, ExportResult> {
         let span_keywords = provider.get_span_keywords();
         let event_keywords = provider.get_event_keywords();
+        let use_byte_for_bools = match provider.get_bool_representation() {
+            InType::U8 => true,
+            InType::Bool32 => false,
+            _ => panic!("unsupported bool reprsentation")
+        };
         let tlg_provider = provider.get_provider();
 
         let (level, keyword) = match span.status {
@@ -389,6 +425,7 @@ impl EventBuilderWrapper {
                 &mut std::iter::empty(),
                 true,
                 true,
+                use_byte_for_bools,
             );
             if err.is_err() {
                 return Box::pin(std::future::ready(err));
@@ -400,6 +437,7 @@ impl EventBuilderWrapper {
                 event_keywords,
                 &activities,
                 &mut span.events.iter(),
+                use_byte_for_bools,
             );
             if err.is_err() {
                 return Box::pin(std::future::ready(err));
@@ -417,6 +455,7 @@ impl EventBuilderWrapper {
                 &mut span.attributes.iter(),
                 false,
                 true,
+                use_byte_for_bools,
             );
             if err.is_err() {
                 return Box::pin(std::future::ready(err));
@@ -462,7 +501,7 @@ mod tests {
             TEST_KEY_FLOAT.f64(7.1),
         ];
 
-        ebw.add_attributes_to_event(&mut attribs.iter().map(|kv| (&kv.key, &kv.value)));
+        ebw.add_attributes_to_event(&mut attribs.iter().map(|kv| (&kv.key, &kv.value)), false);
     }
 
     #[test]
@@ -476,6 +515,6 @@ mod tests {
             TEST_KEY_FLOAT.array(vec![7.1, 0.9, -1.3]),
         ];
 
-        ebw.add_attributes_to_event(&mut attribs.iter().map(|kv| (&kv.key, &kv.value)));
+        ebw.add_attributes_to_event(&mut attribs.iter().map(|kv| (&kv.key, &kv.value)), true);
     }
 }

@@ -8,6 +8,7 @@ use tracelogging_dynamic::Guid;
 pub struct EtwExporterBuilder {
     provider_name: String,
     provider_id: Guid,
+    use_byte_for_bools: bool,
     trace_config: Option<opentelemetry_sdk::trace::Config>,
 }
 
@@ -15,6 +16,7 @@ pub fn new_etw_exporter(name: &str) -> EtwExporterBuilder {
     EtwExporterBuilder {
         provider_name: name.to_owned(),
         provider_id: Guid::from_name(name),
+        use_byte_for_bools: false,
         trace_config: None,
     }
 }
@@ -28,8 +30,19 @@ impl EtwExporterBuilder {
         self
     }
 
+    /// Get the current provider ID that will be used for the ETW provider.
+    /// This is a convenience function to help with tools that do not implement
+    /// the standard provider name to ID  algorithm.
     pub fn get_provider_id(&self) -> Guid {
         self.provider_id
+    }
+
+    /// Log bool attributes using an InType of `xs:byte` instead of `win:Boolean`.
+    /// This is non-standard and not recommended except if compatability with the
+    /// C++ ETW exporter is required.
+    pub fn with_bool8(mut self) -> Self {
+        self.use_byte_for_bools = true;
+        self
     }
 
     /// Assign the SDK trace configuration.
@@ -43,7 +56,7 @@ impl EtwExporterBuilder {
     /// the span has ended. The timestamps of the ETW events, and the
     /// duration of time between events, will not be accurate.
     pub fn install_simple(self) -> opentelemetry_sdk::trace::Tracer {
-        let exporter = BatchExporter::new(&self.provider_name);
+        let exporter = BatchExporter::new(&self.provider_name, self.use_byte_for_bools);
 
         let provider_builder =
             opentelemetry_sdk::trace::TracerProvider::builder().with_simple_exporter(exporter);
@@ -57,7 +70,7 @@ impl EtwExporterBuilder {
     /// at the same time as the end event. The timestamps of the start
     /// and end ETW events will roughly match the actual start and end of the span.
     pub fn install_realtime(self) -> opentelemetry_sdk::trace::Tracer {
-        let exporter = RealtimeExporter::new(&self.provider_name);
+        let exporter = RealtimeExporter::new(&self.provider_name, self.use_byte_for_bools);
 
         let provider_builder =
             opentelemetry_sdk::trace::TracerProvider::builder().with_span_processor(exporter);

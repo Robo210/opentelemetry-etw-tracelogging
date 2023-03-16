@@ -46,18 +46,18 @@ fn main() {
             vec![KYLE_KEY.string("is cool"), SABO_KEY.string("is great")],
         );
 
-        let span_builder = tracer2
-            .span_builder("my_cool_realtime_span")
-            .with_kind(opentelemetry::trace::SpanKind::Client)
-            .with_status(opentelemetry::trace::Status::Error {
-                description: "asdf".into(),
-            });
+        // let span_builder = tracer2
+        //     .span_builder("my_cool_realtime_span")
+        //     .with_kind(opentelemetry::trace::SpanKind::Client)
+        //     .with_status(opentelemetry::trace::Status::Error {
+        //         description: "asdf".into(),
+        //     });
 
-        let mut span = tracer2.build(span_builder);
+        // let mut span = tracer2.build(span_builder);
 
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-        span.add_event("qwerty", vec![]);
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        // std::thread::sleep(std::time::Duration::from_millis(1000));
+        // span.add_event("qwerty", vec![]);
+        // std::thread::sleep(std::time::Duration::from_millis(1000));
     });
 
     shutdown_tracer_provider(); // sending remaining spans
