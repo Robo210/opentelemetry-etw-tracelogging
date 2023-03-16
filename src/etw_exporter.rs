@@ -322,7 +322,7 @@ impl EventBuilderWrapper {
 
         if tlg_provider.enabled(level, keyword) {
             let span_context = opentelemetry_api::trace::Span::span_context(span);
-            //let api_span = span as &dyn opentelemetry_api::trace::Span;
+
             let span_data = span.exported_data(); // Would be nice if span.data was public
             let (name, start_time, parent_activity_id, kind, add_tags) = match span_data {
                 Some(data) => (
