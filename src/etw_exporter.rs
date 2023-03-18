@@ -3,8 +3,8 @@ use crate::error::*;
 use chrono::{Datelike, Timelike};
 use futures_util::future::BoxFuture;
 use opentelemetry::trace::Event;
-use opentelemetry::Array;
 use opentelemetry::trace::TraceId;
+use opentelemetry::Array;
 use opentelemetry::{
     trace::{SpanId, SpanKind, Status, TraceError},
     Key, Value,
@@ -109,21 +109,19 @@ impl EventBuilderWrapper {
         self
     }
 
-    fn add_attributes_to_event(&mut self, attribs: &mut dyn Iterator<Item = (&Key, &Value)>, use_byte_for_bools: bool) {
+    fn add_attributes_to_event(
+        &mut self,
+        attribs: &mut dyn Iterator<Item = (&Key, &Value)>,
+        use_byte_for_bools: bool,
+    ) {
         for attrib in attribs {
             let field_name = &attrib.0.to_string();
             match attrib.1 {
                 Value::Bool(b) => {
                     if use_byte_for_bools {
                         self.add_u8(field_name, *b as u8, OutType::Boolean, 0);
-                    }
-                    else {
-                        self.add_bool32(
-                            field_name,
-                            *b as i32,
-                            OutType::Boolean,
-                            0,
-                        );
+                    } else {
+                        self.add_bool32(field_name, *b as i32, OutType::Boolean, 0);
                     }
                 }
                 Value::I64(i) => {
@@ -144,8 +142,7 @@ impl EventBuilderWrapper {
                                 OutType::Boolean,
                                 0,
                             );
-                        }
-                        else {
+                        } else {
                             self.add_bool32_sequence(
                                 field_name,
                                 v.iter().map(|b| if *b { &1i32 } else { &0i32 }),
@@ -209,7 +206,8 @@ impl EventBuilderWrapper {
                 self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
 
                 self.add_attributes_to_event(
-                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)), use_byte_for_bools
+                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                    use_byte_for_bools,
                 );
 
                 let win32err = self.write(
@@ -315,7 +313,7 @@ impl EventBuilderWrapper {
         let use_byte_for_bools = match provider.get_bool_representation() {
             InType::U8 => true,
             InType::Bool32 => false,
-            _ => panic!("unsupported bool reprsentation")
+            _ => panic!("unsupported bool reprsentation"),
         };
         let (level, keyword) = (Level::Informational, span_keywords);
         let tlg_provider = provider.get_provider();
@@ -341,8 +339,11 @@ impl EventBuilderWrapper {
                 ),
             };
 
-            let activities =
-                get_activities(&span_context.span_id(), &parent_activity_id, &span_context.trace_id());
+            let activities = get_activities(
+                &span_context.span_id(),
+                &parent_activity_id,
+                &span_context.trace_id(),
+            );
 
             self.write_span_event(
                 &tlg_provider,
@@ -373,7 +374,7 @@ impl EventBuilderWrapper {
         let use_byte_for_bools = match provider.get_bool_representation() {
             InType::U8 => true,
             InType::Bool32 => false,
-            _ => panic!("unsupported bool reprsentation")
+            _ => panic!("unsupported bool reprsentation"),
         };
         let (level, keyword) = (Level::Informational, span_keywords);
         let tlg_provider = provider.get_provider();
@@ -423,7 +424,7 @@ impl EventBuilderWrapper {
         let use_byte_for_bools = match provider.get_bool_representation() {
             InType::U8 => true,
             InType::Bool32 => false,
-            _ => panic!("unsupported bool reprsentation")
+            _ => panic!("unsupported bool reprsentation"),
         };
         let tlg_provider = provider.get_provider();
 

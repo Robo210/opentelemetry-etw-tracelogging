@@ -32,7 +32,11 @@ impl RealtimeExporter {
                 provider,
                 span_keywords: 1,
                 event_keywords: 2,
-                bool_intype: if use_byte_for_bools { InType::U8 } else { InType::Bool32 }
+                bool_intype: if use_byte_for_bools {
+                    InType::U8
+                } else {
+                    InType::Bool32
+                },
             }),
             ebw: Mutex::new(EventBuilderWrapper::new()),
         }

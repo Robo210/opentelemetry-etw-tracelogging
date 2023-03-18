@@ -18,7 +18,10 @@ fn main() {
         let span = cx.span();
         span.add_event(
             "SampleEventName",
-            vec![SAMPLE_KEY_STR.string("sample string"), SAMPLE_KEY_BOOL.bool(true)],
+            vec![
+                SAMPLE_KEY_STR.string("sample string"),
+                SAMPLE_KEY_BOOL.bool(true),
+            ],
         );
 
         let span_builder = tracer
@@ -37,7 +40,8 @@ fn main() {
 
     std::thread::sleep(std::time::Duration::from_millis(1000));
 
-    let tracer2 = otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name").install_realtime();
+    let tracer2 =
+        otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name").install_realtime();
 
     tracer2.in_span("RealtimeOuterSpanName", |cx| {
         std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -56,7 +60,10 @@ fn main() {
         let mut span = tracer2.build(span_builder);
 
         std::thread::sleep(std::time::Duration::from_millis(1000));
-        span.add_event("RealtimeSampleEvent2", vec![SAMPLE_KEY_BOOL.array(vec![false, true, false])]);
+        span.add_event(
+            "RealtimeSampleEvent2",
+            vec![SAMPLE_KEY_BOOL.array(vec![false, true, false])],
+        );
         std::thread::sleep(std::time::Duration::from_millis(1000));
     });
 

@@ -39,7 +39,7 @@
 //! Data such as the span's status (which corresponds to the ETW event's level)
 //! is not available for the span start when logging in real-time. Attributes and
 //! other data are only guaranteed to be present on span end events.
-//! 
+//!
 //! The realtime exporter operates as a span processor rather than a span exporter.
 //! It does not use sampling, which is technically required by the span processors spec.
 //!
@@ -47,31 +47,28 @@
 //!
 //! Every span that is exported is logged synchronously as an ETW event.
 //! Batching or asynchronous logging is not implemented by the exporter.
-//! 
+//!
 //! # Span Links
 //! Span links are not (yet) implemented.
-//! 
+//!
 //! # Differences with [OpenTelemetry-C++ ETW Exporter](https://github.com/open-telemetry/opentelemetry-cpp/tree/main/exporters/etw)
-//! 
+//!
 //! - Spans are represented as ETW events differently.
 //!   - The C++ exporter emits one ETW event for each span, when the span is completed. This event contains a
 //!   start time and duration in the ETW event payload.
 //!   - The Rust exporter emits two ETW events for each span, one for the span start and one for the span end.
 //!   This allows for tools such as WPA to match the two events and generate a Region of Interest for that period of time.
-//! - Span Events reference their span ETW events differently.
-//!   - The C++ exporter emits an ETW event for each span event that contains a `SpanId` field in the ETW event payload.
-//!   - The Rust exporter emits an ETW event for each span event that have the span's activity ID set in the ETW event header.
 //! - In C++, `bool` types are represented in the ETW event as InType `xs:byte`, OutType `xs:boolean`.
 //! In Rust, `bool` types are represented in the ETW event as InType `win:Boolean`, OutType `xs:boolean`.
 //!   - The C++ representation is more space efficient but is non-standard.
 //!   - Rust applications can use the `xs:byte` representation by calling [`span_exporter::EtwExporterBuilder::with_byte_sized_bools`]
 //!   when building the exporter.
 //! - The C++ exporter converts the span Kind and Status to numeric values. The Rust exporter logs the string values.
-//! - The OpenTelemetry-C++ SDK supports non-standard value types such as 32-bit and unsigned values,
-//! as well as optionally GUIDs. The OpenTelemetry-Rust crate does not support any of these, so the
-//! values will always be logged as signed, 64-bit integers or strings.
+//! - The OpenTelemetry-C++ SDK supports non-standard value types such as 32-bit and unsigned values, as well as
+//!  optionally GUIDs. The OpenTelemetry-Rust crate does not support any of these, so the values will always be
+//! logged as signed, 64-bit integers or strings.
 //! - The C++ exporter does not support arrays and instead uses strings containing comma-separated
-//! values for various fields. The Rust exporerter will use arrays of the proper type. 
+//! values for various fields. The Rust exporerter will use arrays of the proper type.
 //! - The C++ exporter optionally allows ETW event payloads to be encoded using `MsgPack`.
 //! The Rust exporter only allows ETW event payloads to be encoded in standardardized ways
 //! (i.e. self-describing events using TraceLogging metadata).
@@ -81,7 +78,7 @@
 //! - The C++ exporter does not tag its ETW events or fields containing the "real" timestamp for the span/event.
 //! - The C++ exporter and Rust exporter use different algorithms to generate activity IDs from span IDs.
 //! This should not be noticable as span IDs and activity IDs should always be unique.
-//! 
+//!
 //! # Examples
 //!
 //! ## Batch Exporter

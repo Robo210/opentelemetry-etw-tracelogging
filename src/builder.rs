@@ -102,10 +102,31 @@ mod tests {
     #[test]
     fn create_builder() {
         let builder = new_etw_exporter("my_provider_name");
-        assert!(builder.get_provider_id() == Guid::from_fields(0x6386e494, 0x0d79, 0x57b7, [0xa8, 0x38, 0x16, 0x8d, 0xc4, 0x19, 0xf5, 0x42]));
+        assert!(
+            builder.get_provider_id()
+                == Guid::from_fields(
+                    0x6386e494,
+                    0x0d79,
+                    0x57b7,
+                    [0xa8, 0x38, 0x16, 0x8d, 0xc4, 0x19, 0xf5, 0x42]
+                )
+        );
 
-        let builder = builder.with_provider_id(Guid::from_fields(0x1fa0f771, 0x9607, 0x4fe2, [0x8c, 0x39, 0x2b, 0x6c, 0x61, 0x43, 0xbb, 0x87]));
-        assert!(builder.get_provider_id() == Guid::from_fields(0x1fa0f771, 0x9607, 0x4fe2, [0x8c, 0x39, 0x2b, 0x6c, 0x61, 0x43, 0xbb, 0x87]));
+        let builder = builder.with_provider_id(Guid::from_fields(
+            0x1fa0f771,
+            0x9607,
+            0x4fe2,
+            [0x8c, 0x39, 0x2b, 0x6c, 0x61, 0x43, 0xbb, 0x87],
+        ));
+        assert!(
+            builder.get_provider_id()
+                == Guid::from_fields(
+                    0x1fa0f771,
+                    0x9607,
+                    0x4fe2,
+                    [0x8c, 0x39, 0x2b, 0x6c, 0x61, 0x43, 0xbb, 0x87]
+                )
+        );
     }
 
     #[test]
