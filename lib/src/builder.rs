@@ -9,6 +9,8 @@ pub struct EtwExporterBuilder {
     provider_name: String,
     provider_id: Guid,
     use_byte_for_bools: bool,
+    #[cfg(feature = "json")]
+    json: bool,
     trace_config: Option<opentelemetry_sdk::trace::Config>,
 }
 
@@ -17,6 +19,8 @@ pub fn new_etw_exporter(name: &str) -> EtwExporterBuilder {
         provider_name: name.to_owned(),
         provider_id: Guid::from_name(name),
         use_byte_for_bools: false,
+        #[cfg(feature = "json")]
+        json: false,
         trace_config: None,
     }
 }
@@ -48,6 +52,14 @@ impl EtwExporterBuilder {
     /// Assign the SDK trace configuration.
     pub fn with_trace_config(mut self, config: opentelemetry_sdk::trace::Config) -> Self {
         self.trace_config = Some(config);
+        self
+    }
+
+    /// Encode the event payload as a single JSON string rather than multiple fields.
+    /// Recommended only for compatability with the C++ ETW exporter.
+    #[cfg(feature = "json")]
+    pub fn with_json_payload(mut self) -> Self {
+        self.json = true;
         self
     }
 

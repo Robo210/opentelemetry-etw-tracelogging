@@ -1,0 +1,17 @@
+[package]
+name = "test-opentelemetry-etw"
+description = "Sample app for OpenTelemetry-Rust Trace Span Exporter to ETW"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.67"
+authors = ["Kyle Sabo"]
+
+[dependencies]
+opentelemetry = {workspace = true}
+opentelemetry_api = {workspace = true}
+opentelemetry-etw = {workspace = true, features=["json"]}
+
+[[bin]]
+name = "main"
+path = "main.rs"

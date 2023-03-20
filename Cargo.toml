@@ -1,15 +1,7 @@
-[package]
-name = "opentelemetry-etw"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = ["bin", "lib"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+[workspace.dependencies]
 opentelemetry = "0.18"
-tracelogging = ">= 1.0.2"
-tracelogging_dynamic = ">= 1.0.2"
 opentelemetry_api = {version="0.18", default-features = false, features=["trace"]}
-opentelemetry_sdk = "0.18"
-futures-util = "0.3"
-chrono = {version="0.4", default-features = false, features=["std"]}
+opentelemetry-etw = { path = "lib" }

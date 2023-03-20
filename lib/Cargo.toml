@@ -1,0 +1,25 @@
+[package]
+name = "opentelemetry-etw"
+description = "OpenTelemetry-Rust Trace Span Exporter to ETW"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/Robo210/opentelemetry-etw-tracelogging"
+rust-version = "1.67"
+authors = ["Kyle Sabo"]
+
+[features]
+json = ["dep:serde_json"]
+default = []
+
+[lib]
+
+[dependencies]
+opentelemetry = "0.18"
+tracelogging = ">= 1.0.2"
+tracelogging_dynamic = ">= 1.0.2"
+opentelemetry_api = {version="0.18", default-features = false, features=["trace"]}
+opentelemetry_sdk = "0.18"
+futures-util = "0.3"
+chrono = {version="0.4", default-features = false, features=["std"]}
+serde_json = {version="1.0", optional=true}

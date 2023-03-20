@@ -10,7 +10,9 @@ const SAMPLE_KEY_INT: Key = Key::from_static_str("int");
 const SAMPLE_KEY_FLOAT: Key = Key::from_static_str("float");
 
 fn main() {
-    let tracer = otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name").install_simple();
+    let tracer = otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name")
+        .with_json_payload()
+        .install_simple();
 
     tracer.in_span("OuterSpanName", |cx| {
         std::thread::sleep(std::time::Duration::from_millis(1000));
