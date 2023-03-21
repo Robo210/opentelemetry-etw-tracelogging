@@ -10,6 +10,7 @@ struct ExporterConfig {
     span_keywords: u64,
     event_keywords: u64,
     bool_intype: InType,
+    json: bool,
 }
 
 pub struct BatchExporter {
@@ -18,7 +19,7 @@ pub struct BatchExporter {
 }
 
 impl BatchExporter {
-    pub(crate) fn new(provider_name: &str, use_byte_for_bools: bool) -> Self {
+    pub(crate) fn new(provider_name: &str, use_byte_for_bools: bool, export_payload_as_json: bool) -> Self {
         let mut provider = Box::pin(Provider::new());
         unsafe {
             provider
@@ -35,6 +36,7 @@ impl BatchExporter {
                 } else {
                     InType::Bool32
                 },
+                json: export_payload_as_json,
             },
             ebw: EventBuilderWrapper::new(),
         }
@@ -63,6 +65,10 @@ impl EtwExporter for ExporterConfig {
     fn get_bool_representation(&self) -> InType {
         self.bool_intype
     }
+
+    fn get_export_as_json(&self) -> bool {
+        self.json
+    }
 }
 
 impl SpanExporter for BatchExporter {
@@ -81,6 +87,6 @@ mod tests {
 
     #[test]
     fn create_batch_exporter() {
-        let _ = BatchExporter::new("my_provider_name", true);
+        let _ = BatchExporter::new("my_provider_name", true, true);
     }
 }

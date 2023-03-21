@@ -18,6 +18,7 @@ pub trait EtwExporter {
     fn get_span_keywords(&self) -> u64;
     fn get_event_keywords(&self) -> u64;
     fn get_bool_representation(&self) -> InType;
+    fn get_export_as_json(&self) -> bool;
 }
 
 struct Win32SystemTime {
@@ -170,6 +171,51 @@ impl EventBuilderWrapper {
         }
     }
 
+    #[cfg(feature = "json")]
+    fn add_attributes_to_event_as_json(
+        &mut self,
+        attribs: &mut dyn Iterator<Item = (&Key, &Value)>,
+    ) {
+        let mut payload: std::collections::BTreeMap<String, serde_json::Value> = Default::default();
+
+        for attrib in attribs {
+            let field_name = &attrib.0.to_string();
+            match attrib.1 {
+                Value::Bool(b) => {
+                    payload.insert(field_name.clone(), serde_json::Value::Bool(*b));
+                }
+                Value::I64(i) => {
+                    payload.insert(field_name.clone(), serde_json::Value::Number(serde_json::Number::from(*i)));
+                }
+                Value::F64(f) => {
+                    payload.insert(field_name.clone(), serde_json::Value::Number(serde_json::Number::from_f64(*f).unwrap()));
+                }
+                Value::String(s) => {
+                    payload.insert(field_name.clone(), serde_json::Value::String(s.to_string()));
+                }
+                Value::Array(array) => match array {
+                    Array::Bool(v) => {
+                        payload.insert(field_name.clone(), serde_json::Value::Array(v.iter().map(|b| serde_json::Value::Bool(*b)).collect()));
+                    }
+                    Array::I64(v) => {
+                        payload.insert(field_name.clone(), serde_json::Value::Array(v.iter().map(|i| serde_json::Value::Number(serde_json::Number::from(*i))).collect()));
+                    }
+                    Array::F64(v) => {
+                        payload.insert(field_name.clone(), serde_json::Value::Array(v.iter().map(|f| serde_json::Value::Number(serde_json::Number::from_f64(*f).unwrap())).collect()));
+                    }
+                    Array::String(v) => {
+                        payload.insert(field_name.clone(), serde_json::Value::Array(v.iter().map(|s| serde_json::Value::String(s.to_string())).collect()));
+                    }
+                },
+            }
+        }
+
+        let json_string = serde_json::to_string(&payload);
+        if json_string.is_ok() {
+            self.add_str8("Payload", &json_string.unwrap(), OutType::Json, 0);
+        }
+    }
+
     fn write_events(
         &mut self,
         tlg_provider: &Pin<&mut Provider>,
@@ -178,6 +224,7 @@ impl EventBuilderWrapper {
         activities: &Activities,
         events: &mut dyn Iterator<Item = &Event>,
         use_byte_for_bools: bool,
+        export_payload_as_json: bool,
     ) -> ExportResult {
         if tlg_provider.enabled(level, keywords) {
             for event in events {
@@ -205,10 +252,20 @@ impl EventBuilderWrapper {
 
                 self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
 
-                self.add_attributes_to_event(
-                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
-                    use_byte_for_bools,
-                );
+                let mut added = false;
+
+                #[cfg(feature = "json")]
+                if export_payload_as_json {
+                    self.add_attributes_to_event_as_json(&mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)));
+                    added = true;
+                }
+
+                if !added {
+                    self.add_attributes_to_event(
+                        &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                        use_byte_for_bools,
+                    );
+                }
 
                 let win32err = self.write(
                     tlg_provider,
@@ -240,6 +297,7 @@ impl EventBuilderWrapper {
         is_start: bool,
         add_tags: bool,
         use_byte_for_bools: bool,
+        export_payload_as_json: bool
     ) -> ExportResult {
         let (event_tags, field_tags) = if add_tags {
             (EVENT_TAG_IGNORE_EVENT_TIME, FIELD_TAG_IS_REAL_EVENT_TIME)
@@ -289,7 +347,18 @@ impl EventBuilderWrapper {
 
         self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
 
-        self.add_attributes_to_event(attributes, use_byte_for_bools);
+        
+        let mut added = false;
+
+        #[cfg(feature = "json")]
+        if export_payload_as_json {
+            self.add_attributes_to_event_as_json(attributes);
+            added = true;
+        }
+
+        if !added {
+            self.add_attributes_to_event(attributes, use_byte_for_bools);
+        }
 
         let win32err = self.write(
             tlg_provider,
@@ -315,6 +384,7 @@ impl EventBuilderWrapper {
             InType::Bool32 => false,
             _ => panic!("unsupported bool reprsentation"),
         };
+        let export_payload_as_json = provider.get_export_as_json();
         let (level, keyword) = (Level::Informational, span_keywords);
         let tlg_provider = provider.get_provider();
 
@@ -358,6 +428,7 @@ impl EventBuilderWrapper {
                 true,
                 add_tags,
                 use_byte_for_bools,
+                export_payload_as_json,
             )?;
         }
 
@@ -376,6 +447,7 @@ impl EventBuilderWrapper {
             InType::Bool32 => false,
             _ => panic!("unsupported bool reprsentation"),
         };
+        let export_payload_as_json = provider.get_export_as_json();
         let (level, keyword) = (Level::Informational, span_keywords);
         let tlg_provider = provider.get_provider();
 
@@ -393,6 +465,7 @@ impl EventBuilderWrapper {
                 &activities,
                 &mut span_data.events.iter(),
                 use_byte_for_bools,
+                export_payload_as_json,
             )?;
 
             self.write_span_event(
@@ -408,6 +481,7 @@ impl EventBuilderWrapper {
                 false,
                 false,
                 use_byte_for_bools,
+                export_payload_as_json,
             )?;
         }
 
@@ -426,6 +500,7 @@ impl EventBuilderWrapper {
             InType::Bool32 => false,
             _ => panic!("unsupported bool reprsentation"),
         };
+        let export_payload_as_json = provider.get_export_as_json();
         let tlg_provider = provider.get_provider();
 
         let (level, keyword) = match span.status {
@@ -454,6 +529,7 @@ impl EventBuilderWrapper {
                 true,
                 true,
                 use_byte_for_bools,
+                export_payload_as_json,
             );
             if err.is_err() {
                 return Box::pin(std::future::ready(err));
@@ -466,6 +542,7 @@ impl EventBuilderWrapper {
                 &activities,
                 &mut span.events.iter(),
                 use_byte_for_bools,
+                export_payload_as_json,
             );
             if err.is_err() {
                 return Box::pin(std::future::ready(err));
@@ -484,6 +561,7 @@ impl EventBuilderWrapper {
                 false,
                 true,
                 use_byte_for_bools,
+                export_payload_as_json,
             );
             if err.is_err() {
                 return Box::pin(std::future::ready(err));

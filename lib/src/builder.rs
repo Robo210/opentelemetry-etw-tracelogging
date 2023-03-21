@@ -57,7 +57,8 @@ impl EtwExporterBuilder {
 
     /// Encode the event payload as a single JSON string rather than multiple fields.
     /// Recommended only for compatability with the C++ ETW exporter.
-    #[cfg(feature = "json")]
+    /// Requires the `json` feature to be enabled on the crate.
+    #[cfg(any(feature = "json", doc))]
     pub fn with_json_payload(mut self) -> Self {
         self.json = true;
         self
@@ -68,7 +69,7 @@ impl EtwExporterBuilder {
     /// the span has ended. The timestamps of the ETW events, and the
     /// duration of time between events, will not be accurate.
     pub fn install_simple(self) -> opentelemetry_sdk::trace::Tracer {
-        let exporter = BatchExporter::new(&self.provider_name, self.use_byte_for_bools);
+        let exporter = BatchExporter::new(&self.provider_name, self.use_byte_for_bools, self.json);
 
         let provider_builder =
             opentelemetry_sdk::trace::TracerProvider::builder().with_simple_exporter(exporter);
@@ -82,7 +83,7 @@ impl EtwExporterBuilder {
     /// at the same time as the end event. The timestamps of the start
     /// and end ETW events will roughly match the actual start and end of the span.
     pub fn install_realtime(self) -> opentelemetry_sdk::trace::Tracer {
-        let exporter = RealtimeExporter::new(&self.provider_name, self.use_byte_for_bools);
+        let exporter = RealtimeExporter::new(&self.provider_name, self.use_byte_for_bools, self.json);
 
         let provider_builder =
             opentelemetry_sdk::trace::TracerProvider::builder().with_span_processor(exporter);
