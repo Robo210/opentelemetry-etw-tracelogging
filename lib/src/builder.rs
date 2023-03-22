@@ -55,8 +55,11 @@ impl EtwExporterBuilder {
         self
     }
 
+    /// For advanced scenarios.
     /// Encode the event payload as a single JSON string rather than multiple fields.
-    /// Recommended only for compatability with the C++ ETW exporter.
+    /// Recommended only for compatability with the C++ ETW exporter. In general,
+    /// the textual representation of the event payload should be left to the event
+    /// consumer.
     /// Requires the `json` feature to be enabled on the crate.
     #[cfg(any(feature = "json", doc))]
     pub fn with_json_payload(mut self) -> Self {

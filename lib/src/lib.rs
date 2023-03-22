@@ -69,15 +69,11 @@
 //! logged as signed, 64-bit integers or strings.
 //! - The C++ exporter does not support arrays and instead uses strings containing comma-separated
 //! values for various fields. The Rust exporter will use arrays of the proper type.
-//! - The C++ exporter combines all attributes into a single JSON string and logs it in the ETW event as a field
-//! named "Payload".
-//! The Rust exporter logs each attribute as a separate field in the ETW event.
+//! - The C++ exporter can combine all attributes into a single JSON string that is then encoded with MsgPack,
+//! and logs it in the ETW event as a field named "Payload".
 //!   - Rust applications can emit a JSON string containing all the attributes by enabling the optional feature
 //!   `json` on the crate and calling [`span_exporter::EtwExporterBuilder::with_json_payload`] when building
-//!   the exporter.
-//! - The C++ exporter optionally allows ETW event payloads to be encoded using `MsgPack`.
-//! The Rust exporter only allows ETW event payloads to be encoded in standardardized ways
-//! (i.e. self-describing events using TraceLogging metadata).
+//!   the exporter. MsgPack encoding is not supported.
 //! - The C++ exporter supports logs from the the OpenTelemetry Logging API proposal.
 //! This is not (yet) supported by OpenTelemetry-Rust.
 //! - The C++ exporter does not (currently) use opcodes or levels on its ETW events.
