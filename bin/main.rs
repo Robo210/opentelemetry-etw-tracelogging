@@ -1,4 +1,4 @@
-use opentelemetry::trace::TraceContextExt;
+use opentelemetry::trace::{TraceContextExt, Link, SpanContext};
 use opentelemetry::Key;
 use opentelemetry_api::global::shutdown_tracer_provider;
 use opentelemetry_api::trace::{Span, Tracer};
@@ -14,10 +14,15 @@ fn main() {
         .with_json_payload()
         .install_simple();
 
+    let mut span_context: SpanContext = SpanContext::empty_context();
+
     tracer.in_span("OuterSpanName", |cx| {
         std::thread::sleep(std::time::Duration::from_millis(1000));
 
         let span = cx.span();
+
+        span_context = span.span_context().clone();
+
         span.add_event(
             "SampleEventName",
             vec![
@@ -54,9 +59,12 @@ fn main() {
             vec![SAMPLE_KEY_INT.i64(5), SAMPLE_KEY_FLOAT.f64(7.1)],
         );
 
+        let link = Link::new(span_context, vec![SAMPLE_KEY_STR.string("link_attribute")]);
+
         let span_builder = tracer2
             .span_builder("RealtimeOuterSpanName")
             .with_kind(opentelemetry::trace::SpanKind::Server)
+            .with_links(vec![link])
             .with_status(opentelemetry::trace::Status::Ok);
 
         let mut span = tracer2.build(span_builder);

@@ -3,6 +3,7 @@ use crate::error::*;
 use chrono::{Datelike, Timelike};
 use futures_util::future::BoxFuture;
 use opentelemetry::trace::Event;
+use opentelemetry::trace::Link;
 use opentelemetry::trace::TraceId;
 use opentelemetry::Array;
 use opentelemetry::{
@@ -17,6 +18,7 @@ pub trait EtwExporter {
     fn get_provider(&mut self) -> Pin<&mut Provider>;
     fn get_span_keywords(&self) -> u64;
     fn get_event_keywords(&self) -> u64;
+    fn get_links_keywords(&self) -> u64;
     fn get_bool_representation(&self) -> InType;
     fn get_export_as_json(&self) -> bool;
 }
@@ -185,26 +187,64 @@ impl EventBuilderWrapper {
                     payload.insert(field_name.clone(), serde_json::Value::Bool(*b));
                 }
                 Value::I64(i) => {
-                    payload.insert(field_name.clone(), serde_json::Value::Number(serde_json::Number::from(*i)));
+                    payload.insert(
+                        field_name.clone(),
+                        serde_json::Value::Number(serde_json::Number::from(*i)),
+                    );
                 }
                 Value::F64(f) => {
-                    payload.insert(field_name.clone(), serde_json::Value::Number(serde_json::Number::from_f64(*f).unwrap()));
+                    payload.insert(
+                        field_name.clone(),
+                        serde_json::Value::Number(serde_json::Number::from_f64(*f).unwrap()),
+                    );
                 }
                 Value::String(s) => {
                     payload.insert(field_name.clone(), serde_json::Value::String(s.to_string()));
                 }
                 Value::Array(array) => match array {
                     Array::Bool(v) => {
-                        payload.insert(field_name.clone(), serde_json::Value::Array(v.iter().map(|b| serde_json::Value::Bool(*b)).collect()));
+                        payload.insert(
+                            field_name.clone(),
+                            serde_json::Value::Array(
+                                v.iter().map(|b| serde_json::Value::Bool(*b)).collect(),
+                            ),
+                        );
                     }
                     Array::I64(v) => {
-                        payload.insert(field_name.clone(), serde_json::Value::Array(v.iter().map(|i| serde_json::Value::Number(serde_json::Number::from(*i))).collect()));
+                        payload.insert(
+                            field_name.clone(),
+                            serde_json::Value::Array(
+                                v.iter()
+                                    .map(|i| {
+                                        serde_json::Value::Number(serde_json::Number::from(*i))
+                                    })
+                                    .collect(),
+                            ),
+                        );
                     }
                     Array::F64(v) => {
-                        payload.insert(field_name.clone(), serde_json::Value::Array(v.iter().map(|f| serde_json::Value::Number(serde_json::Number::from_f64(*f).unwrap())).collect()));
+                        payload.insert(
+                            field_name.clone(),
+                            serde_json::Value::Array(
+                                v.iter()
+                                    .map(|f| {
+                                        serde_json::Value::Number(
+                                            serde_json::Number::from_f64(*f).unwrap(),
+                                        )
+                                    })
+                                    .collect(),
+                            ),
+                        );
                     }
                     Array::String(v) => {
-                        payload.insert(field_name.clone(), serde_json::Value::Array(v.iter().map(|s| serde_json::Value::String(s.to_string())).collect()));
+                        payload.insert(
+                            field_name.clone(),
+                            serde_json::Value::Array(
+                                v.iter()
+                                    .map(|s| serde_json::Value::String(s.to_string()))
+                                    .collect(),
+                            ),
+                        );
                     }
                 },
             }
@@ -214,6 +254,62 @@ impl EventBuilderWrapper {
         if json_string.is_ok() {
             self.add_str8("Payload", &json_string.unwrap(), OutType::Json, 0);
         }
+    }
+
+    fn write_links(
+        &mut self,
+        tlg_provider: &Pin<&mut Provider>,
+        level: Level,
+        keywords: u64,
+        activities: &Activities,
+        event_name: &str,
+        span_timestamp: &SystemTime,
+        links: &mut dyn Iterator<Item = &Link>,
+        use_byte_for_bools: bool,
+    ) -> ExportResult {
+        if tlg_provider.enabled(level, keywords) {
+            for link in links {
+                self.reset(
+                    event_name,
+                    Level::Verbose,
+                    keywords,
+                    EVENT_TAG_IGNORE_EVENT_TIME,
+                );
+                self.opcode(Opcode::Info);
+
+                self.add_filetime(
+                    "otel_event_time",
+                    win_filetime_from_systemtime!(span_timestamp),
+                    OutType::DateTimeUtc,
+                    FIELD_TAG_IS_REAL_EVENT_TIME,
+                );
+                self.add_win32_systemtime("time", &(*span_timestamp).into(), 0);
+
+                self.add_str8(
+                    "Link",
+                    std::fmt::format(format_args!("{:16x}", link.span_context.span_id())),
+                    OutType::Utf8,
+                    0,
+                );
+
+                self.add_attributes_to_event(
+                    &mut link.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                    use_byte_for_bools,
+                );
+
+                let win32err = self.write(
+                    tlg_provider,
+                    Some(&activities.activity_id),
+                    activities.parent_activity_id.as_ref(),
+                );
+
+                if win32err != 0 {
+                    return Err(TraceError::ExportFailed(Box::new(Error { win32err })));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn write_events(
@@ -256,7 +352,9 @@ impl EventBuilderWrapper {
 
                 #[cfg(feature = "json")]
                 if export_payload_as_json {
-                    self.add_attributes_to_event_as_json(&mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)));
+                    self.add_attributes_to_event_as_json(
+                        &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                    );
                     added = true;
                 }
 
@@ -297,7 +395,7 @@ impl EventBuilderWrapper {
         is_start: bool,
         add_tags: bool,
         use_byte_for_bools: bool,
-        export_payload_as_json: bool
+        export_payload_as_json: bool,
     ) -> ExportResult {
         let (event_tags, field_tags) = if add_tags {
             (EVENT_TAG_IGNORE_EVENT_TIME, FIELD_TAG_IS_REAL_EVENT_TIME)
@@ -347,7 +445,6 @@ impl EventBuilderWrapper {
 
         self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
 
-        
         let mut added = false;
 
         #[cfg(feature = "json")]
@@ -379,25 +476,25 @@ impl EventBuilderWrapper {
         span: &opentelemetry::sdk::trace::Span,
     ) -> ExportResult {
         let span_keywords = provider.get_span_keywords();
+        let links_keywords = provider.get_links_keywords();
         let use_byte_for_bools = match provider.get_bool_representation() {
             InType::U8 => true,
             InType::Bool32 => false,
             _ => panic!("unsupported bool reprsentation"),
         };
         let export_payload_as_json = provider.get_export_as_json();
-        let (level, keyword) = (Level::Informational, span_keywords);
         let tlg_provider = provider.get_provider();
 
-        if tlg_provider.enabled(level, keyword) {
+        if tlg_provider.enabled(Level::Informational, span_keywords) {
             let span_context = opentelemetry_api::trace::Span::span_context(span);
 
             let span_data = span.exported_data(); // Would be nice if span.data was public
-            let (name, start_time, parent_activity_id, kind, add_tags) = match span_data {
+            let (name, start_time, parent_activity_id, kind, add_tags) = match &span_data {
                 Some(data) => (
                     data.name.to_string(),
                     data.start_time,
                     data.parent_span_id,
-                    Some(data.span_kind),
+                    Some(&data.span_kind),
                     false,
                 ),
                 None => (
@@ -418,11 +515,11 @@ impl EventBuilderWrapper {
             self.write_span_event(
                 &tlg_provider,
                 &name,
-                level,
-                keyword,
+                Level::Informational,
+                span_keywords,
                 &activities,
                 start_time,
-                kind.as_ref(),
+                kind,
                 &Status::Unset,
                 &mut std::iter::empty(),
                 true,
@@ -430,6 +527,19 @@ impl EventBuilderWrapper {
                 use_byte_for_bools,
                 export_payload_as_json,
             )?;
+
+            if span_data.is_some() {
+                self.write_links(
+                    &tlg_provider,
+                    Level::Verbose,
+                    links_keywords,
+                    &activities,
+                    &name,
+                    &start_time,
+                    &mut span_data.unwrap().links.iter(),
+                    use_byte_for_bools,
+                )?;
+            }
         }
 
         Ok(())
@@ -448,10 +558,9 @@ impl EventBuilderWrapper {
             _ => panic!("unsupported bool reprsentation"),
         };
         let export_payload_as_json = provider.get_export_as_json();
-        let (level, keyword) = (Level::Informational, span_keywords);
         let tlg_provider = provider.get_provider();
 
-        if tlg_provider.enabled(level, keyword) {
+        if tlg_provider.enabled(Level::Informational, span_keywords) {
             let activities = get_activities(
                 &span_data.span_context.span_id(),
                 &span_data.parent_span_id,
@@ -471,8 +580,8 @@ impl EventBuilderWrapper {
             self.write_span_event(
                 &tlg_provider,
                 &span_data.name,
-                level,
-                keyword,
+                Level::Informational,
+                span_keywords,
                 &activities,
                 span_data.end_time,
                 Some(&span_data.span_kind),
@@ -495,6 +604,7 @@ impl EventBuilderWrapper {
     ) -> BoxFuture<'static, ExportResult> {
         let span_keywords = provider.get_span_keywords();
         let event_keywords = provider.get_event_keywords();
+        let links_keywords = provider.get_links_keywords();
         let use_byte_for_bools = match provider.get_bool_representation() {
             InType::U8 => true,
             InType::Bool32 => false,
@@ -503,24 +613,24 @@ impl EventBuilderWrapper {
         let export_payload_as_json = provider.get_export_as_json();
         let tlg_provider = provider.get_provider();
 
-        let (level, keyword) = match span.status {
-            Status::Ok => (Level::Informational, span_keywords),
-            Status::Error { .. } => (Level::Error, span_keywords),
-            Status::Unset => (Level::Verbose, span_keywords),
+        let level = match span.status {
+            Status::Ok => Level::Informational,
+            Status::Error { .. } => Level::Error,
+            Status::Unset => Level::Verbose,
         };
 
-        let activities = get_activities(
-            &span.span_context.span_id(),
-            &span.parent_span_id,
-            &span.span_context.trace_id(),
-        );
+        if tlg_provider.enabled(level, span_keywords) {
+            let activities = get_activities(
+                &span.span_context.span_id(),
+                &span.parent_span_id,
+                &span.span_context.trace_id(),
+            );
 
-        if tlg_provider.enabled(level, keyword) {
             let mut err = self.write_span_event(
                 &tlg_provider,
                 &span.name,
                 level,
-                keyword,
+                span_keywords,
                 &activities,
                 span.start_time,
                 Some(&span.span_kind),
@@ -548,11 +658,25 @@ impl EventBuilderWrapper {
                 return Box::pin(std::future::ready(err));
             }
 
+            err = self.write_links(
+                &tlg_provider,
+                Level::Verbose,
+                links_keywords,
+                &activities,
+                &span.name,
+                &span.start_time,
+                &mut span.links.iter(),
+                use_byte_for_bools,
+            );
+            if err.is_err() {
+                return Box::pin(std::future::ready(err));
+            }
+
             err = self.write_span_event(
                 &tlg_provider,
                 &span.name,
                 level,
-                keyword,
+                span_keywords,
                 &activities,
                 span.end_time,
                 Some(&span.span_kind),

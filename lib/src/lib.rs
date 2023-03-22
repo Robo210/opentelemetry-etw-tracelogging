@@ -49,7 +49,12 @@
 //! Batching or asynchronous logging is not implemented by the exporter.
 //!
 //! # Span Links
-//! Span links are not (yet) implemented.
+//! 
+//! Each span link is exported as a separate ETW event. The ETW event's name will
+//! match the span start event's name, and the link event's activity ID will match
+//! the span's activity ID. A `Link` field in the payload contains the linked
+//! span's ID, and any attributes for the link will be logged as additional paylod fields.
+//! Links are not (currently) supported by the JSON exporter option (described below).
 //!
 //! # Differences with [OpenTelemetry-C++ ETW Exporter](https://github.com/open-telemetry/opentelemetry-cpp/tree/main/exporters/etw)
 //!
@@ -64,6 +69,8 @@
 //!   - Rust applications can use the `xs:byte` representation by calling [`span_exporter::EtwExporterBuilder::with_byte_sized_bools`]
 //!   when building the exporter.
 //! - The C++ exporter converts the span Kind and Status to numeric values. The Rust exporter logs the string values.
+//! - The C++ exporter converts span Links into a single comma-separated string of span IDs, and does not include attributes.
+//! The Rust exporter uses individual events for each link, as described in the section [Span Links].
 //! - The OpenTelemetry-C++ SDK supports non-standard value types such as 32-bit and unsigned values, as well as
 //!  optionally GUIDs. The OpenTelemetry-Rust crate does not support any of these, so the values will always be
 //! logged as signed, 64-bit integers or strings.

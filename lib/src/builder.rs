@@ -86,7 +86,8 @@ impl EtwExporterBuilder {
     /// at the same time as the end event. The timestamps of the start
     /// and end ETW events will roughly match the actual start and end of the span.
     pub fn install_realtime(self) -> opentelemetry_sdk::trace::Tracer {
-        let exporter = RealtimeExporter::new(&self.provider_name, self.use_byte_for_bools, self.json);
+        let exporter =
+            RealtimeExporter::new(&self.provider_name, self.use_byte_for_bools, self.json);
 
         let provider_builder =
             opentelemetry_sdk::trace::TracerProvider::builder().with_span_processor(exporter);
