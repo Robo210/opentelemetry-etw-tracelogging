@@ -56,8 +56,8 @@ impl Debug for BatchExporter {
 }
 
 impl EtwExporter for ExporterConfig {
-    fn get_provider(&mut self) -> Pin<&mut Provider> {
-        self.provider.as_mut()
+    fn get_provider(&self) -> Pin<&Provider> {
+        self.provider.as_ref()
     }
 
     fn get_span_keywords(&self) -> u64 {

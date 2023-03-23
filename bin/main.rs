@@ -1,4 +1,4 @@
-use opentelemetry::trace::{TraceContextExt, Link, SpanContext};
+use opentelemetry::trace::{Link, SpanContext, TraceContextExt};
 use opentelemetry::Key;
 use opentelemetry_api::global::shutdown_tracer_provider;
 use opentelemetry_api::trace::{Span, Tracer};
@@ -10,42 +10,42 @@ const SAMPLE_KEY_INT: Key = Key::from_static_str("int");
 const SAMPLE_KEY_FLOAT: Key = Key::from_static_str("float");
 
 fn main() {
-    let tracer = otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name")
-        .with_json_payload()
-        .install_simple();
+    // let tracer = otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name")
+    //     .with_json_payload()
+    //     .install_simple();
 
     let mut span_context: SpanContext = SpanContext::empty_context();
 
-    tracer.in_span("OuterSpanName", |cx| {
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+    // tracer.in_span("OuterSpanName", |cx| {
+    //     std::thread::sleep(std::time::Duration::from_millis(1000));
 
-        let span = cx.span();
+    //     let span = cx.span();
 
-        span_context = span.span_context().clone();
+    //     span_context = span.span_context().clone();
 
-        span.add_event(
-            "SampleEventName",
-            vec![
-                SAMPLE_KEY_STR.string("sample string"),
-                SAMPLE_KEY_BOOL.bool(true),
-            ],
-        );
+    //     span.add_event(
+    //         "SampleEventName",
+    //         vec![
+    //             SAMPLE_KEY_STR.string("sample string"),
+    //             SAMPLE_KEY_BOOL.bool(true),
+    //         ],
+    //     );
 
-        let span_builder = tracer
-            .span_builder("OuterSpanName")
-            .with_kind(opentelemetry::trace::SpanKind::Client)
-            .with_status(opentelemetry::trace::Status::Error {
-                description: "My error message".into(),
-            });
+    //     let span_builder = tracer
+    //         .span_builder("OuterSpanName")
+    //         .with_kind(opentelemetry::trace::SpanKind::Client)
+    //         .with_status(opentelemetry::trace::Status::Error {
+    //             description: "My error message".into(),
+    //         });
 
-        let mut span = tracer.build(span_builder);
+    //     let mut span = tracer.build(span_builder);
 
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-        span.add_event("SampleEvent2", vec![]);
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-    });
+    //     std::thread::sleep(std::time::Duration::from_millis(1000));
+    //     span.add_event("SampleEvent2", vec![]);
+    //     std::thread::sleep(std::time::Duration::from_millis(1000));
+    // });
 
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    // std::thread::sleep(std::time::Duration::from_millis(1000));
 
     let tracer2 =
         otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name").install_realtime();

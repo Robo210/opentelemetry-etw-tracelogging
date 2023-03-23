@@ -85,14 +85,33 @@ impl EtwExporterBuilder {
     /// and ended. Events that were added to the span will be exported
     /// at the same time as the end event. The timestamps of the start
     /// and end ETW events will roughly match the actual start and end of the span.
-    pub fn install_realtime(self) -> opentelemetry_sdk::trace::Tracer {
-        let exporter =
-            RealtimeExporter::new(&self.provider_name, self.use_byte_for_bools, self.json);
+    pub fn install_realtime(mut self) -> RealtimeTracer {
+        // let exporter =
+        //     RealtimeExporter::new(&self.provider_name, self.use_byte_for_bools, self.json);
 
-        let provider_builder =
-            opentelemetry_sdk::trace::TracerProvider::builder().with_span_processor(exporter);
+        // let provider_builder =
+        //     opentelemetry_sdk::trace::TracerProvider::builder().with_span_processor(exporter);
 
-        self.install(provider_builder)
+        // self.install(provider_builder)
+
+        let otel_config = if let Some(config) = self.trace_config.take() {
+            config
+        } else {
+            opentelemetry_sdk::trace::config()
+        };
+
+        let provider = RealtimeTracerProvider::new(
+            &self.provider_name,
+            otel_config,
+            self.use_byte_for_bools,
+            self.json,
+        );
+
+        let tracer =
+            provider.versioned_tracer("opentelemetry-etw", Some(env!("CARGO_PKG_VERSION")), None);
+        let _ = global::set_tracer_provider(provider);
+
+        tracer
     }
 
     fn install(mut self, provider_builder: Builder) -> opentelemetry_sdk::trace::Tracer {
