@@ -120,13 +120,6 @@ impl RealtimeSpan {
 }
 
 impl opentelemetry_api::trace::Span for RealtimeSpan {
-    fn add_event<T>(&mut self, name: T, attributes: Vec<opentelemetry::KeyValue>)
-    where
-        T: Into<std::borrow::Cow<'static, str>>,
-    {
-        self.add_event_with_timestamp(name, SystemTime::now(), attributes)
-    }
-
     fn add_event_with_timestamp<T>(
         &mut self,
         name: T,
@@ -145,7 +138,10 @@ impl opentelemetry_api::trace::Span for RealtimeSpan {
         }
     }
 
-    fn end(&mut self) {
+    fn end_with_timestamp(&mut self, timestamp: std::time::SystemTime) {
+        self.span_data.end_time = timestamp;
+
+        // Not really sure why we bother using an atomic for ended but just blindly assign the end time...
         let ended = self.ended.compare_exchange(false, true, Ordering::Acquire, Ordering::Acquire);
 
         let _ = ended.and_then(|_| {
@@ -155,14 +151,9 @@ impl opentelemetry_api::trace::Span for RealtimeSpan {
                     let _ = ebw.log_span_end(config.as_ref(), self);
                 }
             }
-            
+
             Ok(())
         });
-    }
-
-    fn end_with_timestamp(&mut self, timestamp: std::time::SystemTime) {
-        self.span_data.end_time = timestamp;
-        self.end()
     }
 
     fn is_recording(&self) -> bool {
@@ -176,18 +167,8 @@ impl opentelemetry_api::trace::Span for RealtimeSpan {
         }
     }
 
-    fn record_error(&mut self, _err: &dyn std::error::Error) {
-        todo!()
-    }
-
     fn set_attribute(&mut self, attribute: opentelemetry::KeyValue) {
         self.span_data.attributes.insert(attribute);
-    }
-
-    fn set_attributes(&mut self, attributes: impl IntoIterator<Item = opentelemetry::KeyValue>) {
-        for attribute in attributes {
-            self.span_data.attributes.insert(attribute);
-        }
     }
 
     fn set_status(&mut self, status: opentelemetry::trace::Status) {
