@@ -13,7 +13,7 @@ use opentelemetry_sdk::{
 use std::borrow::Cow;
 use std::pin::Pin;
 use std::sync::Mutex;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Weak, atomic::*};
 use std::time::SystemTime;
 use tracelogging_dynamic::*;
 
@@ -57,6 +57,7 @@ pub struct RealtimeSpan {
     ebw: Mutex<EventBuilderWrapper>,
     etw_config: Weak<ExporterConfig>,
     span_data: SpanData,
+    ended: AtomicBool,
 }
 
 impl RealtimeSpan {
@@ -101,6 +102,7 @@ impl RealtimeSpan {
                 resource: Cow::default(),                // TODO
                 instrumentation_lib: Default::default(), // TODO
             },
+            ended: AtomicBool::new(false),
         }
     }
 
@@ -144,12 +146,18 @@ impl opentelemetry_api::trace::Span for RealtimeSpan {
     }
 
     fn end(&mut self) {
-        let mut strong = self.etw_config.upgrade();
-        if let Some(config) = strong.as_mut() {
-            if let Ok(mut ebw) = self.ebw.lock() {
-                let _ = ebw.log_span_end(config.as_ref(), self);
+        let ended = self.ended.compare_exchange(false, true, Ordering::Acquire, Ordering::Acquire);
+
+        let _ = ended.and_then(|_| {
+            let mut strong = self.etw_config.upgrade();
+            if let Some(config) = strong.as_mut() {
+                if let Ok(mut ebw) = self.ebw.lock() {
+                    let _ = ebw.log_span_end(config.as_ref(), self);
+                }
             }
-        }
+            
+            Ok(())
+        });
     }
 
     fn end_with_timestamp(&mut self, timestamp: std::time::SystemTime) {
@@ -195,6 +203,12 @@ impl opentelemetry_api::trace::Span for RealtimeSpan {
         T: Into<std::borrow::Cow<'static, str>>,
     {
         self.span_data.name = new_name.into();
+    }
+}
+
+impl Drop for RealtimeSpan {
+    fn drop(&mut self) {
+        <Self as opentelemetry_api::trace::Span>::end(self);
     }
 }
 

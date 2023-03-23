@@ -552,16 +552,6 @@ impl EventBuilderWrapper {
                 &span_data.span_context.trace_id(),
             );
 
-            // self.write_events(
-            //     &tlg_provider,
-            //     Level::Verbose,
-            //     event_keywords,
-            //     &activities,
-            //     &mut span_data.events.iter(),
-            //     use_byte_for_bools,
-            //     export_payload_as_json,
-            // )?;
-
             self.write_span_event(
                 &tlg_provider,
                 &span_data.name,
