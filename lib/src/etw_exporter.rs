@@ -15,12 +15,16 @@ use std::{pin::Pin, time::SystemTime};
 use tracelogging_dynamic::*;
 
 pub trait EtwExporter {
-    fn get_provider(&mut self) -> Pin<&mut Provider>;
+    fn get_provider(&self) -> Pin<&Provider>;
     fn get_span_keywords(&self) -> u64;
     fn get_event_keywords(&self) -> u64;
     fn get_links_keywords(&self) -> u64;
     fn get_bool_representation(&self) -> InType;
     fn get_export_as_json(&self) -> bool;
+}
+
+pub trait EtwSpan {
+    fn get_span_data(&self) -> &SpanData;
 }
 
 struct Win32SystemTime {
@@ -258,7 +262,7 @@ impl EventBuilderWrapper {
 
     fn write_links(
         &mut self,
-        tlg_provider: &Pin<&mut Provider>,
+        tlg_provider: &Pin<&Provider>,
         level: Level,
         keywords: u64,
         activities: &Activities,
@@ -314,7 +318,7 @@ impl EventBuilderWrapper {
 
     fn write_events(
         &mut self,
-        tlg_provider: &Pin<&mut Provider>,
+        tlg_provider: &Pin<&Provider>,
         level: Level,
         keywords: u64,
         activities: &Activities,
@@ -383,12 +387,12 @@ impl EventBuilderWrapper {
     #[allow(clippy::too_many_arguments)]
     fn write_span_event(
         &mut self,
-        tlg_provider: &Pin<&mut Provider>,
+        tlg_provider: &Pin<&Provider>,
         name: &str,
         level: Level,
         keywords: u64,
         activities: &Activities,
-        event_time: SystemTime,
+        event_time: &SystemTime,
         span_kind: Option<&SpanKind>,
         status: &Status,
         attributes: &mut dyn Iterator<Item = (&Key, &Value)>,
@@ -417,7 +421,7 @@ impl EventBuilderWrapper {
             OutType::DateTimeUtc,
             field_tags,
         );
-        self.add_win32_systemtime(event_name, &event_time.into(), 0);
+        self.add_win32_systemtime(event_name, &(*event_time).into(), 0);
 
         if let Some(sk) = span_kind {
             self.add_string(
@@ -470,11 +474,10 @@ impl EventBuilderWrapper {
         Ok(())
     }
 
-    pub fn log_span_start(
-        &mut self,
-        provider: &mut dyn EtwExporter,
-        span: &opentelemetry::sdk::trace::Span,
-    ) -> ExportResult {
+    pub fn log_span_start<T>(&mut self, provider: &dyn EtwExporter, span: &T) -> ExportResult
+    where
+        T: opentelemetry_api::trace::Span + EtwSpan,
+    {
         let span_keywords = provider.get_span_keywords();
         let links_keywords = provider.get_links_keywords();
         let use_byte_for_bools = match provider.get_bool_representation() {
@@ -488,70 +491,51 @@ impl EventBuilderWrapper {
         if tlg_provider.enabled(Level::Informational, span_keywords) {
             let span_context = opentelemetry_api::trace::Span::span_context(span);
 
-            let span_data = span.exported_data(); // Would be nice if span.data was public
-            let (name, start_time, parent_activity_id, kind, add_tags) = match &span_data {
-                Some(data) => (
-                    data.name.to_string(),
-                    data.start_time,
-                    data.parent_span_id,
-                    Some(&data.span_kind),
-                    false,
-                ),
-                None => (
-                    span_context.span_id().to_string(),
-                    SystemTime::now(),
-                    SpanId::INVALID,
-                    None,
-                    true,
-                ),
-            };
+            let span_data = span.get_span_data();
 
             let activities = get_activities(
                 &span_context.span_id(),
-                &parent_activity_id,
+                &span_data.parent_span_id,
                 &span_context.trace_id(),
             );
 
             self.write_span_event(
                 &tlg_provider,
-                &name,
+                &span_data.name,
                 Level::Informational,
                 span_keywords,
                 &activities,
-                start_time,
-                kind,
+                &span_data.start_time,
+                Some(&span_data.span_kind),
                 &Status::Unset,
                 &mut std::iter::empty(),
                 true,
-                add_tags,
+                false,
                 use_byte_for_bools,
                 export_payload_as_json,
             )?;
 
-            if span_data.is_some() {
-                self.write_links(
-                    &tlg_provider,
-                    Level::Verbose,
-                    links_keywords,
-                    &activities,
-                    &name,
-                    &start_time,
-                    &mut span_data.unwrap().links.iter(),
-                    use_byte_for_bools,
-                )?;
-            }
+            self.write_links(
+                &tlg_provider,
+                Level::Verbose,
+                links_keywords,
+                &activities,
+                &&span_data.name,
+                &span_data.start_time,
+                &mut span_data.links.iter(),
+                use_byte_for_bools,
+            )?;
         }
 
         Ok(())
     }
 
-    pub fn log_span_end(
-        &mut self,
-        provider: &mut dyn EtwExporter,
-        span_data: &SpanData,
-    ) -> ExportResult {
+    pub fn log_span_end<T>(&mut self, provider: &dyn EtwExporter, span: &T) -> ExportResult
+    where
+        T: opentelemetry_api::trace::Span + EtwSpan,
+    {
         let span_keywords = provider.get_span_keywords();
-        let event_keywords = provider.get_event_keywords();
+        //let event_keywords = provider.get_event_keywords();
         let use_byte_for_bools = match provider.get_bool_representation() {
             InType::U8 => true,
             InType::Bool32 => false,
@@ -559,6 +543,7 @@ impl EventBuilderWrapper {
         };
         let export_payload_as_json = provider.get_export_as_json();
         let tlg_provider = provider.get_provider();
+        let span_data = span.get_span_data();
 
         if tlg_provider.enabled(Level::Informational, span_keywords) {
             let activities = get_activities(
@@ -567,15 +552,15 @@ impl EventBuilderWrapper {
                 &span_data.span_context.trace_id(),
             );
 
-            self.write_events(
-                &tlg_provider,
-                Level::Verbose,
-                event_keywords,
-                &activities,
-                &mut span_data.events.iter(),
-                use_byte_for_bools,
-                export_payload_as_json,
-            )?;
+            // self.write_events(
+            //     &tlg_provider,
+            //     Level::Verbose,
+            //     event_keywords,
+            //     &activities,
+            //     &mut span_data.events.iter(),
+            //     use_byte_for_bools,
+            //     export_payload_as_json,
+            // )?;
 
             self.write_span_event(
                 &tlg_provider,
@@ -583,7 +568,7 @@ impl EventBuilderWrapper {
                 Level::Informational,
                 span_keywords,
                 &activities,
-                span_data.end_time,
+                &span_data.end_time,
                 Some(&span_data.span_kind),
                 &span_data.status,
                 &mut span_data.attributes.iter(),
@@ -597,9 +582,90 @@ impl EventBuilderWrapper {
         Ok(())
     }
 
+    pub fn log_span_event<T>(
+        &mut self,
+        provider: &dyn EtwExporter,
+        event: opentelemetry_api::trace::Event,
+        span: &T,
+    ) -> ExportResult
+    where
+        T: opentelemetry_api::trace::Span + EtwSpan,
+    {
+        let event_keywords = provider.get_event_keywords();
+        let use_byte_for_bools = match provider.get_bool_representation() {
+            InType::U8 => true,
+            InType::Bool32 => false,
+            _ => panic!("unsupported bool reprsentation"),
+        };
+        let export_payload_as_json = provider.get_export_as_json();
+        let tlg_provider = provider.get_provider();
+        let span_data = span.get_span_data();
+
+        if tlg_provider.enabled(Level::Informational, event_keywords) {
+            let activities = get_activities(
+                &span_data.span_context.span_id(),
+                &span_data.parent_span_id,
+                &span_data.span_context.trace_id(),
+            );
+
+            self.reset(
+                &event.name,
+                Level::Verbose,
+                event_keywords,
+                EVENT_TAG_IGNORE_EVENT_TIME,
+            );
+            self.opcode(Opcode::Info);
+
+            self.add_filetime(
+                "otel_event_time",
+                win_filetime_from_systemtime!(event.timestamp),
+                OutType::DateTimeUtc,
+                FIELD_TAG_IS_REAL_EVENT_TIME,
+            );
+            self.add_win32_systemtime("time", &event.timestamp.into(), 0);
+
+            self.add_str8("SpanId", &activities.span_id, OutType::Utf8, 0);
+
+            if !activities.parent_span_id.is_empty() {
+                self.add_str8("ParentId", &activities.parent_span_id, OutType::Utf8, 0);
+            }
+
+            self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
+
+            let mut added = false;
+
+            #[cfg(feature = "json")]
+            if export_payload_as_json {
+                self.add_attributes_to_event_as_json(
+                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                );
+                added = true;
+            }
+
+            if !added {
+                self.add_attributes_to_event(
+                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                    use_byte_for_bools,
+                );
+            }
+
+            let win32err = self.write(
+                &tlg_provider,
+                Some(&activities.activity_id),
+                activities.parent_activity_id.as_ref(),
+            );
+
+            if win32err != 0 {
+                return Err(TraceError::ExportFailed(Box::new(Error { win32err })));
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn log_spandata(
         &mut self,
-        provider: &mut dyn EtwExporter,
+        provider: &dyn EtwExporter,
         span: &SpanData,
     ) -> BoxFuture<'static, ExportResult> {
         let span_keywords = provider.get_span_keywords();
@@ -632,7 +698,7 @@ impl EventBuilderWrapper {
                 level,
                 span_keywords,
                 &activities,
-                span.start_time,
+                &span.start_time,
                 Some(&span.span_kind),
                 &span.status,
                 &mut std::iter::empty(),
@@ -678,7 +744,7 @@ impl EventBuilderWrapper {
                 level,
                 span_keywords,
                 &activities,
-                span.end_time,
+                &span.end_time,
                 Some(&span.span_kind),
                 &span.status,
                 &mut span.attributes.iter(),

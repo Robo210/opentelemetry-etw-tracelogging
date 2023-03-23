@@ -49,7 +49,7 @@
 //! Batching or asynchronous logging is not implemented by the exporter.
 //!
 //! # Span Links
-//! 
+//!
 //! Each span link is exported as a separate ETW event. The ETW event's name will
 //! match the span start event's name, and the link event's activity ID will match
 //! the span's activity ID. A `Link` field in the payload contains the linked
