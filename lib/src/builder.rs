@@ -9,7 +9,6 @@ pub struct EtwExporterBuilder {
     provider_name: String,
     provider_id: Guid,
     use_byte_for_bools: bool,
-    #[cfg(feature = "json")]
     json: bool,
     trace_config: Option<opentelemetry_sdk::trace::Config>,
 }
@@ -19,7 +18,6 @@ pub fn new_etw_exporter(name: &str) -> EtwExporterBuilder {
         provider_name: name.to_owned(),
         provider_id: Guid::from_name(name),
         use_byte_for_bools: false,
-        #[cfg(feature = "json")]
         json: false,
         trace_config: None,
     }
@@ -86,14 +84,6 @@ impl EtwExporterBuilder {
     /// at the same time as the end event. The timestamps of the start
     /// and end ETW events will roughly match the actual start and end of the span.
     pub fn install_realtime(mut self) -> RealtimeTracer {
-        // let exporter =
-        //     RealtimeExporter::new(&self.provider_name, self.use_byte_for_bools, self.json);
-
-        // let provider_builder =
-        //     opentelemetry_sdk::trace::TracerProvider::builder().with_span_processor(exporter);
-
-        // self.install(provider_builder)
-
         let otel_config = if let Some(config) = self.trace_config.take() {
             config
         } else {

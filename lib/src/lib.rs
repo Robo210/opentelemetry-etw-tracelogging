@@ -152,4 +152,5 @@ pub mod span_exporter {
     pub use crate::builder::*;
     pub use crate::constants::*;
     pub use crate::realtime_exporter::*;
+    pub use crate::error::*;
 }
