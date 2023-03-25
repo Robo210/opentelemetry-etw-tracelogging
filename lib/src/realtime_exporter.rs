@@ -239,11 +239,11 @@ impl RealtimeTracerProvider {
         use_byte_for_bools: bool,
         export_payload_as_json: bool,
     ) -> Self {
-        let mut provider = Box::pin(Provider::new());
+        let provider = Box::pin(Provider::new(provider_name, Provider::options().group_id(&GROUP_ID)));
         unsafe {
             provider
-                .as_mut()
-                .register(provider_name, Provider::options().group_id(&GROUP_ID));
+                .as_ref()
+                .register();
         }
 
         let etw_config = Arc::new(ExporterConfig {
