@@ -25,11 +25,12 @@ impl BatchExporter {
         use_byte_for_bools: bool,
         export_payload_as_json: bool,
     ) -> Self {
-        let provider = Box::pin(Provider::new(provider_name, Provider::options().group_id(&GROUP_ID)));
+        let provider = Box::pin(Provider::new(
+            provider_name,
+            Provider::options().group_id(&GROUP_ID),
+        ));
         unsafe {
-            provider
-                .as_ref()
-                .register();
+            provider.as_ref().register();
         }
         BatchExporter {
             config: ExporterConfig {

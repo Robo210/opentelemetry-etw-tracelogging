@@ -13,7 +13,7 @@ use opentelemetry_sdk::{
 use std::borrow::Cow;
 use std::pin::Pin;
 use std::sync::Mutex;
-use std::sync::{Arc, Weak, atomic::*};
+use std::sync::{atomic::*, Arc, Weak};
 use std::time::SystemTime;
 use tracelogging_dynamic::*;
 
@@ -239,11 +239,12 @@ impl RealtimeTracerProvider {
         use_byte_for_bools: bool,
         export_payload_as_json: bool,
     ) -> Self {
-        let provider = Box::pin(Provider::new(provider_name, Provider::options().group_id(&GROUP_ID)));
+        let provider = Box::pin(Provider::new(
+            provider_name,
+            Provider::options().group_id(&GROUP_ID),
+        ));
         unsafe {
-            provider
-                .as_ref()
-                .register();
+            provider.as_ref().register();
         }
 
         let etw_config = Arc::new(ExporterConfig {

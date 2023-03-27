@@ -1,28 +1,28 @@
 //! # ETW Span Exporter
-//! 
+//!
 //! ## Overview
-//! 
+//!
 //! The ETW Span Exporter logs ETW events for each start, stop, and added event for a
 //! OpenTelemetry Span.
-//! 
+//!
 //! ETW is a Windows-specific system wide, high performance, lossy tracing API built into the
 //! Windows kernel. Turning Spans into ETW events (activities) can allow a user to
 //! the correlate the Span to other system activity, such as disk IO, memory allocations,
 //! sample profiling, network activity, or any other event logged by the thousands of
 //! ETW providers built into Windows and 3rd party software and drivers.
-//! 
+//!
 //! This crate is a no-op when running on Linux.
-//! 
+//!
 //! ETW is not designed to be a transport mechanism or message passing interface for
 //! forwarding data. These scenarios are better covered by other technologies
 //! such as RPC or socket-based transports.
-//! 
+//!
 //! Users unfamiliar with the basics of ETW may find the following links helpful.
 //! The rest of the documentation for this exporter will assume familiarity
 //! with ETW and trace processing tools such as WPA, PerfView, or TraceView.
 //! - <https://learn.microsoft.com/en-us/windows/win32/etw/about-event-tracing>
 //! - <https://learn.microsoft.com/en-us/windows-hardware/test/weg/instrumenting-your-code-with-etw>
-//! 
+//!
 //! This Span exporter uses [TraceLogging](https://learn.microsoft.com/en-us/windows/win32/tracelogging/trace-logging-about)
 //! to log events. The ETW provider ID is generated from a hash of the specified provider name.
 //!
@@ -32,7 +32,7 @@
 //! Span Links are logged as events with keyword 4 and [`tracelogging::Level::Verbose`].
 //!
 //! ## ETW Timestamps
-//! 
+//!
 //! ### Realtime Exporter
 //!
 //! The real-time exporter should be the one used for almost all scenarios.
@@ -44,9 +44,9 @@
 //! exporter. Data such as the span's status (which corresponds to the ETW event's level)
 //! is not available at the start of a span. Attributes and other data are only guaranteed
 //! to be present on span end events.
-//! 
+//!
 //! #### Example
-//! 
+//!
 //! ```no_run
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
@@ -67,7 +67,7 @@
 //! OpenTelemetry-C++ ETW exporter. Spans are exported asynchronously and in batches.
 //! Because of this, the timestamps on the ETW events do not represent the time the span
 //! was originally started or ended.
-//! 
+//!
 //! The Batch Exporter joins the ETW provider to the [provider group](https://learn.microsoft.com/en-us/windows/win32/etw/provider-traits)
 //! `{e60ec51a-8e54-5a4f-2fb260a4f9213b3a}`.
 //! Events in this group should be interpreted according to the event and field tags
@@ -77,7 +77,7 @@
 //! on the EVENT_RECORD should be ignored when processing the event.
 //! To get the real time of the event, look for a field tagged with
 //! [`constants::FIELD_TAG_IS_REAL_EVENT_TIME`].
-//! 
+//!
 //! #### Example
 //! ```no_run
 //! use opentelemetry_api::global::shutdown_tracer_provider;
@@ -151,6 +151,6 @@ pub mod span_exporter {
     pub use crate::batch_exporter::*;
     pub use crate::builder::*;
     pub use crate::constants::*;
-    pub use crate::realtime_exporter::*;
     pub use crate::error::*;
+    pub use crate::realtime_exporter::*;
 }
