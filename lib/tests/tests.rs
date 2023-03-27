@@ -3,12 +3,12 @@ mod etw_helpers;
 #[cfg(test)]
 mod functional {
     use crate::etw_helpers::*;
+    use futures::TryFutureExt; 
     use tracelogging;
     use windows::{
-        core::{GUID, PCSTR, PSTR},
+        core::{GUID, PCSTR},
         s,
         Win32::{
-            Foundation::{GetLastError, WIN32_ERROR},
             System::Diagnostics::Etw::*,
         },
     };
@@ -47,17 +47,30 @@ mod functional {
         let fut = consumer.expect_event(|evt: &EVENT_RECORD| {
             if evt.EventHeader.ProviderId == test_provider_id {
                 println!("Found event from provider!");
+                true
+            } else {
+                false
             }
+        });
 
+        let thread = trace.process_trace()?;
+
+        let fut2 = consumer.expect_event(|_evt| {
             false
         });
 
-        trace.process_trace()?;
+        let fut3 = fut.and_then( |_| fut2 );
 
-        futures::executor::block_on(fut);
+        let result = futures::executor::block_on(fut3);
+        if result.is_err() {
+            thread.stop_and_wait();
+            return Ok(()); // TODO: Remove this once fut2 actually does something
+        } else {
+            thread.wait();
+        }
 
         println!("done");
 
-        Ok(())
+        result
     }
 }

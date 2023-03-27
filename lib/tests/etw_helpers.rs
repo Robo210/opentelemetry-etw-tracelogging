@@ -1,10 +1,9 @@
-use std::{ffi::c_void, mem::ManuallyDrop, pin::Pin, sync::{atomic, Condvar, Mutex}, time::Duration};
+use std::{ffi::c_void, mem::ManuallyDrop, pin::Pin, sync::{atomic, Condvar, Mutex}, time::Duration, thread::JoinHandle};
 
 use windows::{
-    core::{GUID, PCSTR, PSTR},
-    s,
+    core::{PCSTR, PSTR, HRESULT},
     Win32::{
-        Foundation::{GetLastError, WIN32_ERROR},
+        Foundation::{GetLastError},
         System::Diagnostics::Etw::*,
     },
 };
@@ -54,6 +53,7 @@ impl EventTraceProperties {
         self
     }
 
+    #[allow(dead_code)]
     pub fn set_file_name(&mut self, file_name: PCSTR) -> &mut Self {
         if !file_name.is_null() {
             unsafe {
@@ -109,6 +109,7 @@ impl EventTraceLogFile {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_file(file_name: PCSTR, callback: PEVENT_RECORD_CALLBACK) -> EventTraceLogFile {
         unsafe {
             if file_name.is_null() {
@@ -184,6 +185,7 @@ impl ControlTraceHandle {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_session(
         sz_session_name: PCSTR,
     ) -> Result<ControlTraceHandle, windows::core::Error> {
@@ -205,6 +207,7 @@ impl ControlTraceHandle {
         }
     }
 
+    #[allow(dead_code)]
     pub fn manual_stop(self) -> ManuallyDrop<Self> {
         ManuallyDrop::new(self)
     }
@@ -232,6 +235,7 @@ impl ControlTraceHandle {
         }
     }
 
+    #[allow(dead_code)]
     pub fn disable_provider(
         &self,
         provider_id: &windows::core::GUID,
@@ -256,10 +260,6 @@ impl ControlTraceHandle {
     }
 }
 
-pub trait EventConsumer {
-    fn on_event(&self, evt: &EVENT_RECORD) -> bool;
-}
-
 struct InnerProcessTraceHandle<'a, C>
 where
     C: EventConsumer + Unpin + 'a,
@@ -272,7 +272,7 @@ impl<'a, C> InnerProcessTraceHandle<'a, C>
 where
     C: EventConsumer + Unpin + 'a,
 {
-    fn inner_callback(&self, event_record: &EVENT_RECORD) -> bool {
+    fn inner_callback(&self, event_record: &EVENT_RECORD) -> Result<(), windows::core::Error> {
         println!("Inner!");
         <C as EventConsumer>::on_event(&self.consumer.as_ref().unwrap(), event_record)
     }
@@ -312,8 +312,8 @@ where
 
         let ctx = (*event_record).UserContext as *mut InnerProcessTraceHandle<'a, C>;
         if ctx != core::ptr::null_mut() {
-            let should_continue = (*ctx).inner_callback(&(*event_record));
-            if !should_continue {
+            let result = (*ctx).inner_callback(&(*event_record));
+            if result.is_err() {
                 (*ctx).close_trace();
             }
         }
@@ -361,12 +361,7 @@ where
     //     }
     // }
 
-    // pub fn set_event_fn<F>(mut self, event_record_fn: F)
-    // where F : Fn(&EVENT_RECORD) -> bool {
-
-    // }
-
-    pub fn process_trace(&self) -> Result<(), windows::core::Error> {
+    pub fn process_trace(self) -> Result<ProcessTraceThread<'a, C>, windows::core::Error> {
         unsafe {
             if self.inner.hndl.is_none() {
                 panic!();
@@ -379,10 +374,44 @@ where
                     println!("Error {}", err.0);
                 }
             });
-            //thread.join().unwrap();
+
+            Ok(ProcessTraceThread{thread, inner: self.inner})
         }
-        Ok(())
     }
+}
+
+pub struct ProcessTraceThread<'a, C>
+where
+    C: EventConsumer + Unpin + 'a
+{
+    thread: JoinHandle<()>,
+    inner: Pin<Box<InnerProcessTraceHandle<'a, C>>>,
+}
+
+impl<'a, C> ProcessTraceThread<'a, C>
+where
+    C: EventConsumer + Unpin + 'a
+{
+    pub fn stop(self) {
+        unsafe {
+            CloseTrace(self.inner.hndl.unwrap());
+        }
+    }
+
+    pub fn wait(self) {
+        let _ = self.thread.join();
+    }
+
+    pub fn stop_and_wait(self) {
+        unsafe {
+            CloseTrace(self.inner.hndl.unwrap());
+        }
+        let _ = self.thread.join();
+    }
+}
+
+pub trait EventConsumer {
+    fn on_event(&self, evt: &EVENT_RECORD) -> Result<(), windows::core::Error>;
 }
 
 pub struct EtwEventConsumer<'a> {
@@ -395,7 +424,7 @@ pub struct EtwEventConsumer<'a> {
 }
 
 impl<'a> EventConsumer for EtwEventConsumer<'a> {
-    fn on_event(&self, evt: &EVENT_RECORD) -> bool {
+    fn on_event(&self, evt: &EVENT_RECORD) -> Result<(), windows::core::Error> {
         println!("Yay!");
 
         let mut guard;
@@ -414,7 +443,7 @@ impl<'a> EventConsumer for EtwEventConsumer<'a> {
                     .unwrap();
                 if result.1.timed_out() {
                     println!("timed out");
-                    return false;
+                    return Err(windows::core::HRESULT(-2147023436i32).into()); // HRESULT_FROM_WIN32(ERROR_TIMEOUT)
                 } else {
                     guard = result.0;
                     break;
@@ -426,12 +455,16 @@ impl<'a> EventConsumer for EtwEventConsumer<'a> {
         }
 
         if let Some(f) = &*guard {
-            let res = f(evt);
+            let should_continue = f(evt);
             self.event_callback_completed.notify_one();
-            return res;
+            if !should_continue {
+                return Err(windows::core::HRESULT(-2147023673).into()); // HRESULT_FROM_WIN32(ERROR_CANCELLED)
+            } else {
+                return Ok(());
+            }
         }
 
-        false
+        Ok(())
     }
 }
 
@@ -445,42 +478,39 @@ impl<'a> EtwEventConsumer<'a> {
             waiter2: Mutex::new(false),
         }
     }
-    
-    pub async fn expect_event<F>(&self, f: F)
+
+    pub async fn expect_event<F>(&self, f: F) -> Result<(), windows::core::Error>
     where
         F: Fn(&EVENT_RECORD) -> bool + 'a,
     {
-        let test = async move {
-            {
-                let mut guard = self.waiter.lock().unwrap();
-                *guard = Some(Box::new(f));
-            }
+        {
+            let mut guard = self.waiter.lock().unwrap();
+            *guard = Some(Box::new(f));
+        }
 
-            let ready = self.ready_for_next_event.compare_exchange(
-                false,
-                true,
-                atomic::Ordering::Acquire,
-                atomic::Ordering::Relaxed,
-            );
-            if ready.is_err() {
-                panic!("Cannot call expect event twice");
-            } else {
-            }
-            self.next_event_consumer_set.notify_one();
+        let ready = self.ready_for_next_event.compare_exchange(
+            false,
+            true,
+            atomic::Ordering::Acquire,
+            atomic::Ordering::Relaxed,
+        );
+        if ready.is_err() {
+            panic!("Cannot call expect event twice");
+        } else {
+        }
+        self.next_event_consumer_set.notify_one();
 
-            {
-                let guard = self.waiter2.lock().unwrap();
-                let result = self
-                    .event_callback_completed
-                    .wait_timeout(guard, Duration::new(10, 0))
-                    .unwrap();
-                if result.1.timed_out() {
-                    println!("timed out 2");
-                    return false;
-                }
+        {
+            let guard = self.waiter2.lock().unwrap();
+            let result = self
+                .event_callback_completed
+                .wait_timeout(guard, Duration::new(10, 0))
+                .unwrap();
+            if result.1.timed_out() {
+                println!("timed out 2");
+                return Err::<(), windows::core::Error>(windows::core::HRESULT(-2147023436i32).into()); // HRESULT_FROM_WIN32(ERROR_TIMEOUT)
             }
-            return true;
-        };
-        test.await;
+        }
+        return Ok::<(), windows::core::Error>(());
     }
 }
