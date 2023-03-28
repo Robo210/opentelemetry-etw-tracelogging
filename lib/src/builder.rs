@@ -1,7 +1,6 @@
 use crate::batch_exporter::*;
 use crate::realtime_exporter::*;
 use opentelemetry_api::{global, trace::TracerProvider};
-use opentelemetry_sdk::trace::Builder;
 use tracelogging_dynamic::Guid;
 
 #[derive(Debug)]
@@ -10,6 +9,8 @@ pub struct EtwExporterBuilder {
     provider_id: Guid,
     use_byte_for_bools: bool,
     json: bool,
+    emit_common_schema_events: bool,
+    emit_only_common_schema_events: bool,
     trace_config: Option<opentelemetry_sdk::trace::Config>,
 }
 
@@ -19,6 +20,8 @@ pub fn new_etw_exporter(name: &str) -> EtwExporterBuilder {
         provider_id: Guid::from_name(name),
         use_byte_for_bools: false,
         json: false,
+        emit_common_schema_events: false,
+        emit_only_common_schema_events: false,
         trace_config: None,
     }
 }
@@ -55,7 +58,7 @@ impl EtwExporterBuilder {
 
     /// For advanced scenarios.
     /// Encode the event payload as a single JSON string rather than multiple fields.
-    /// Recommended only for compatability with the C++ ETW exporter. In general,
+    /// Recommended only for compatibility with the C++ ETW exporter. In general,
     /// the textual representation of the event payload should be left to the event
     /// consumer.
     /// Requires the `json` feature to be enabled on the crate.
@@ -65,17 +68,55 @@ impl EtwExporterBuilder {
         self
     }
 
+    /// For advanced scenarios.
+    /// Emit extra events that follow the Common Schema 4.0 mapping.
+    /// Recommended only for compatibility with specialized event consumers.
+    /// Most ETW consumers will not benefit from events in this schema, and may perform worse.
+    /// These events are emitted in addition to the normal ETW events.
+    pub fn with_common_schema_events(mut self) -> Self {
+        self.emit_common_schema_events = true;
+        self
+    }
+
+    /// For advanced scenarios.
+    /// Emit *only* events that follows the Common Schema 4.0 mapping.
+    /// Recommended only for compatibility with specialized event consumers.
+    /// Most ETW consumers will not benefit from events in this schema, and may perform worse.
+    pub fn without_normal_events(mut self) -> Self {
+        self.emit_common_schema_events = true;
+        self.emit_only_common_schema_events = true;
+        self
+    }
+
     /// Install the exporter as a "simple" span exporter.
     /// Spans will be automatically batched and exported some time after
     /// the span has ended. The timestamps of the ETW events, and the
     /// duration of time between events, will not be accurate.
-    pub fn install_simple(self) -> opentelemetry_sdk::trace::Tracer {
-        let exporter = BatchExporter::new(&self.provider_name, self.use_byte_for_bools, self.json);
+    pub fn install_simple(mut self) -> opentelemetry_sdk::trace::Tracer {
+        let exporter = BatchExporter::new(
+            &self.provider_name,
+            self.use_byte_for_bools,
+            self.json,
+            self.emit_common_schema_events,
+            !self.emit_only_common_schema_events,
+        );
 
         let provider_builder =
             opentelemetry_sdk::trace::TracerProvider::builder().with_simple_exporter(exporter);
 
-        self.install(provider_builder)
+        let builder = if let Some(config) = self.trace_config.take() {
+            provider_builder.with_config(config)
+        } else {
+            provider_builder
+        };
+
+        let provider = builder.build();
+
+        let tracer =
+            provider.versioned_tracer("opentelemetry-etw", Some(env!("CARGO_PKG_VERSION")), None);
+        let _ = global::set_tracer_provider(provider);
+
+        tracer
     }
 
     /// Install the exporter as a span processor.
@@ -95,23 +136,9 @@ impl EtwExporterBuilder {
             otel_config,
             self.use_byte_for_bools,
             self.json,
+            self.emit_common_schema_events,
+            !self.emit_only_common_schema_events,
         );
-
-        let tracer =
-            provider.versioned_tracer("opentelemetry-etw", Some(env!("CARGO_PKG_VERSION")), None);
-        let _ = global::set_tracer_provider(provider);
-
-        tracer
-    }
-
-    fn install(mut self, provider_builder: Builder) -> opentelemetry_sdk::trace::Tracer {
-        let builder = if let Some(config) = self.trace_config.take() {
-            provider_builder.with_config(config)
-        } else {
-            provider_builder
-        };
-
-        let provider = builder.build();
 
         let tracer =
             provider.versioned_tracer("opentelemetry-etw", Some(env!("CARGO_PKG_VERSION")), None);

@@ -1,11 +1,15 @@
-use std::{ffi::c_void, mem::ManuallyDrop, pin::Pin, sync::{atomic, Condvar, Mutex}, time::Duration, thread::JoinHandle};
+use std::{
+    ffi::c_void,
+    mem::ManuallyDrop,
+    pin::Pin,
+    sync::{atomic, Condvar, Mutex},
+    thread::JoinHandle,
+    time::Duration,
+};
 
 use windows::{
-    core::{PCSTR, PSTR, HRESULT},
-    Win32::{
-        Foundation::{GetLastError},
-        System::Diagnostics::Etw::*,
-    },
+    core::{HRESULT, PCSTR, PSTR},
+    Win32::{Foundation::GetLastError, System::Diagnostics::Etw::*},
 };
 
 #[repr(C)]
@@ -375,14 +379,17 @@ where
                 }
             });
 
-            Ok(ProcessTraceThread{thread, inner: self.inner})
+            Ok(ProcessTraceThread {
+                thread,
+                inner: self.inner,
+            })
         }
     }
 }
 
 pub struct ProcessTraceThread<'a, C>
 where
-    C: EventConsumer + Unpin + 'a
+    C: EventConsumer + Unpin + 'a,
 {
     thread: JoinHandle<()>,
     inner: Pin<Box<InnerProcessTraceHandle<'a, C>>>,
@@ -390,7 +397,7 @@ where
 
 impl<'a, C> ProcessTraceThread<'a, C>
 where
-    C: EventConsumer + Unpin + 'a
+    C: EventConsumer + Unpin + 'a,
 {
     pub fn stop(self) {
         unsafe {
@@ -508,7 +515,9 @@ impl<'a> EtwEventConsumer<'a> {
                 .unwrap();
             if result.1.timed_out() {
                 println!("timed out 2");
-                return Err::<(), windows::core::Error>(windows::core::HRESULT(-2147023436i32).into()); // HRESULT_FROM_WIN32(ERROR_TIMEOUT)
+                return Err::<(), windows::core::Error>(
+                    windows::core::HRESULT(-2147023436i32).into(),
+                ); // HRESULT_FROM_WIN32(ERROR_TIMEOUT)
             }
         }
         return Ok::<(), windows::core::Error>(());

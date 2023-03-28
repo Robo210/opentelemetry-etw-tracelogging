@@ -12,6 +12,8 @@ struct ExporterConfig {
     links_keywords: u64,
     bool_intype: InType,
     json: bool,
+    common_schema: bool,
+    etw_activities: bool,
 }
 
 pub struct BatchExporter {
@@ -24,6 +26,8 @@ impl BatchExporter {
         provider_name: &str,
         use_byte_for_bools: bool,
         export_payload_as_json: bool,
+        common_schema: bool,
+        etw_activities: bool,
     ) -> Self {
         let provider = Box::pin(Provider::new(
             provider_name,
@@ -44,6 +48,8 @@ impl BatchExporter {
                     InType::Bool32
                 },
                 json: export_payload_as_json,
+                common_schema,
+                etw_activities,
             },
             ebw: EventBuilderWrapper::new(),
         }
@@ -80,12 +86,20 @@ impl EtwExporter for ExporterConfig {
     fn get_export_as_json(&self) -> bool {
         self.json
     }
+
+    fn get_export_common_schema_event(&self) -> bool {
+        self.common_schema
+    }
+
+    fn get_export_span_events(&self) -> bool {
+        self.etw_activities
+    }
 }
 
 impl SpanExporter for BatchExporter {
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
         for span in batch {
-            self.ebw.log_spandata(&mut self.config, &span);
+            self.ebw.log_span_data(&mut self.config, &span);
         }
 
         Box::pin(std::future::ready(Ok(())))
@@ -98,6 +112,6 @@ mod tests {
 
     #[test]
     fn create_batch_exporter() {
-        let _ = BatchExporter::new("my_provider_name", true, true);
+        let _ = BatchExporter::new("my_provider_name", true, true, true, true);
     }
 }

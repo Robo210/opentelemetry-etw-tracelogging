@@ -3,14 +3,12 @@ mod etw_helpers;
 #[cfg(test)]
 mod functional {
     use crate::etw_helpers::*;
-    use futures::TryFutureExt; 
+    use futures::TryFutureExt;
     use tracelogging;
     use windows::{
         core::{GUID, PCSTR},
         s,
-        Win32::{
-            System::Diagnostics::Etw::*,
-        },
+        Win32::System::Diagnostics::Etw::*,
     };
 
     const sz_test_session_name: PCSTR = s!("OpenTelemetry-Rust-ETW-Exporter-Tests");
@@ -55,11 +53,9 @@ mod functional {
 
         let thread = trace.process_trace()?;
 
-        let fut2 = consumer.expect_event(|_evt| {
-            false
-        });
+        let fut2 = consumer.expect_event(|_evt| false);
 
-        let fut3 = fut.and_then( |_| fut2 );
+        let fut3 = fut.and_then(|_| fut2);
 
         let result = futures::executor::block_on(fut3);
         if result.is_err() {

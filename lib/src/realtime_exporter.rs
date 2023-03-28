@@ -24,6 +24,8 @@ struct ExporterConfig {
     links_keywords: u64,
     bool_intype: InType,
     json: bool,
+    common_schema: bool,
+    etw_activities: bool,
     config: opentelemetry_sdk::trace::Config,
 }
 
@@ -50,6 +52,14 @@ impl EtwExporter for ExporterConfig {
 
     fn get_export_as_json(&self) -> bool {
         self.json
+    }
+
+    fn get_export_common_schema_event(&self) -> bool {
+        self.common_schema
+    }
+
+    fn get_export_span_events(&self) -> bool {
+        self.etw_activities
     }
 }
 
@@ -142,9 +152,9 @@ impl opentelemetry_api::trace::Span for RealtimeSpan {
         self.span_data.end_time = timestamp;
 
         // Not really sure why we bother using an atomic for ended but just blindly assign the end time...
-        let ended = self.ended.swap(false, Ordering::Acquire);
+        let already_ended = self.ended.swap(true, Ordering::Acquire);
 
-        if ended {
+        if !already_ended {
             let mut strong = self.etw_config.upgrade();
             if let Some(config) = strong.as_mut() {
                 if let Ok(mut ebw) = self.ebw.lock() {
@@ -238,6 +248,8 @@ impl RealtimeTracerProvider {
         config: opentelemetry_sdk::trace::Config,
         use_byte_for_bools: bool,
         export_payload_as_json: bool,
+        common_schema: bool,
+        etw_activities: bool,
     ) -> Self {
         let provider = Box::pin(Provider::new(
             provider_name,
@@ -258,6 +270,8 @@ impl RealtimeTracerProvider {
                 InType::Bool32
             },
             json: export_payload_as_json,
+            common_schema,
+            etw_activities,
             config: config,
         });
 
