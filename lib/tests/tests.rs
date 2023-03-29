@@ -1,6 +1,7 @@
 mod etw_helpers;
 
 #[cfg(test)]
+#[allow(dead_code, non_upper_case_globals)]
 mod functional {
     use crate::etw_helpers::*;
     use futures::TryFutureExt;
@@ -58,14 +59,12 @@ mod functional {
         let fut3 = fut.and_then(|_| fut2);
 
         let result = futures::executor::block_on(fut3);
-        if result.is_err() {
-            thread.stop_and_wait();
-            return Ok(()); // TODO: Remove this once fut2 actually does something
-        } else {
-            thread.wait();
-        }
 
-        println!("done");
+        let _ = thread.stop_and_wait(); // We don't care about what ProcessTrace returned
+
+        if result.is_err() {
+            return Ok(()); // TODO: Remove this once fut2 actually does something
+        }
 
         result
     }

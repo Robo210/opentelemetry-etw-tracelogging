@@ -8,7 +8,7 @@ use std::{
 };
 
 use windows::{
-    core::{HRESULT, PCSTR, PSTR},
+    core::{PCSTR, PSTR},
     Win32::{Foundation::GetLastError, System::Diagnostics::Etw::*},
 };
 
@@ -375,7 +375,9 @@ where
             let thread = std::thread::spawn(move || {
                 let err = ProcessTrace(&handles, None, None);
                 if err.is_err() {
-                    println!("Error {}", err.0);
+                    Err(windows::core::Error::from(err))
+                } else {
+                    Ok(())
                 }
             });
 
@@ -391,7 +393,7 @@ pub struct ProcessTraceThread<'a, C>
 where
     C: EventConsumer + Unpin + 'a,
 {
-    thread: JoinHandle<()>,
+    thread: JoinHandle<Result<(), windows::core::Error>>,
     inner: Pin<Box<InnerProcessTraceHandle<'a, C>>>,
 }
 
@@ -399,21 +401,11 @@ impl<'a, C> ProcessTraceThread<'a, C>
 where
     C: EventConsumer + Unpin + 'a,
 {
-    pub fn stop(self) {
+    pub fn stop_and_wait(self) -> Result<(), windows::core::Error> {
         unsafe {
             CloseTrace(self.inner.hndl.unwrap());
         }
-    }
-
-    pub fn wait(self) {
-        let _ = self.thread.join();
-    }
-
-    pub fn stop_and_wait(self) {
-        unsafe {
-            CloseTrace(self.inner.hndl.unwrap());
-        }
-        let _ = self.thread.join();
+        self.thread.join().unwrap()
     }
 }
 
@@ -432,8 +424,6 @@ pub struct EtwEventConsumer<'a> {
 
 impl<'a> EventConsumer for EtwEventConsumer<'a> {
     fn on_event(&self, evt: &EVENT_RECORD) -> Result<(), windows::core::Error> {
-        println!("Yay!");
-
         let mut guard;
         loop {
             let event_consumer_ready = self.ready_for_next_event.compare_exchange(
@@ -449,7 +439,6 @@ impl<'a> EventConsumer for EtwEventConsumer<'a> {
                     .wait_timeout(guard, Duration::new(10, 0))
                     .unwrap();
                 if result.1.timed_out() {
-                    println!("timed out");
                     return Err(windows::core::HRESULT(-2147023436i32).into()); // HRESULT_FROM_WIN32(ERROR_TIMEOUT)
                 } else {
                     guard = result.0;
@@ -502,7 +491,7 @@ impl<'a> EtwEventConsumer<'a> {
             atomic::Ordering::Relaxed,
         );
         if ready.is_err() {
-            panic!("Cannot call expect event twice");
+            panic!("Cannot await more than one call to expect_event at once");
         } else {
         }
         self.next_event_consumer_set.notify_one();
@@ -514,7 +503,6 @@ impl<'a> EtwEventConsumer<'a> {
                 .wait_timeout(guard, Duration::new(10, 0))
                 .unwrap();
             if result.1.timed_out() {
-                println!("timed out 2");
                 return Err::<(), windows::core::Error>(
                     windows::core::HRESULT(-2147023436i32).into(),
                 ); // HRESULT_FROM_WIN32(ERROR_TIMEOUT)

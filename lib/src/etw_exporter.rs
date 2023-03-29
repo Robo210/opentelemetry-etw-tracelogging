@@ -8,18 +8,54 @@ use opentelemetry::{
     Key, Value,
 };
 use opentelemetry_sdk::export::trace::{ExportResult, SpanData};
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::{pin::Pin, time::SystemTime};
 use tracelogging_dynamic::*;
 
-pub trait EtwExporter {
-    fn get_provider(&self) -> Pin<&Provider>;
-    fn get_span_keywords(&self) -> u64;
-    fn get_event_keywords(&self) -> u64;
-    fn get_links_keywords(&self) -> u64;
-    fn get_bool_representation(&self) -> InType;
-    fn get_export_as_json(&self) -> bool;
-    fn get_export_common_schema_event(&self) -> bool;
-    fn get_export_span_events(&self) -> bool;
+pub(crate) struct EtwExporterConfig {
+    pub(crate) provider: Pin<Box<Provider>>,
+    pub(crate) span_keywords: u64,
+    pub(crate) event_keywords: u64,
+    pub(crate) links_keywords: u64,
+    pub(crate) bool_intype: InType,
+    pub(crate) json: bool,
+    pub(crate) common_schema: bool,
+    pub(crate) etw_activities: bool,
+}
+
+impl EtwExporterConfig {
+    pub(crate) fn get_provider(&self) -> Pin<&Provider> {
+        self.provider.as_ref()
+    }
+
+    pub(crate) fn get_span_keywords(&self) -> u64 {
+        self.span_keywords
+    }
+
+    pub(crate) fn get_event_keywords(&self) -> u64 {
+        self.event_keywords
+    }
+
+    pub(crate) fn get_links_keywords(&self) -> u64 {
+        self.links_keywords
+    }
+
+    pub(crate) fn get_bool_representation(&self) -> InType {
+        self.bool_intype
+    }
+
+    pub(crate) fn get_export_as_json(&self) -> bool {
+        self.json
+    }
+
+    pub(crate) fn get_export_common_schema_event(&self) -> bool {
+        self.common_schema
+    }
+
+    pub(crate) fn get_export_span_events(&self) -> bool {
+        self.etw_activities
+    }
 }
 
 pub trait EtwSpan {
@@ -475,7 +511,78 @@ impl EventBuilderWrapper {
         Ok(())
     }
 
-    fn write_common_schema_span(
+    fn extract_common_schema_parta_exts<'a, T>(
+        attributes: T,
+    ) -> HashMap<&'static str, Vec<(&'static str, Cow<'a, str>)>>
+    where
+        T: IntoIterator<Item = (&'a Key, &'a Value)>,
+    {
+        // Pull out PartA fields from the resource
+
+        let mut has_cloud = false;
+        let mut service_name: Cow<str> = Cow::default();
+        let mut service_namespace: Cow<str> = Cow::default();
+        let mut service_instance_id: Cow<str> = Cow::default();
+        let mut enduser_id: Cow<str> = Cow::default();
+
+        for cfg in attributes {
+            let key_str = cfg.0.as_str();
+            match key_str {
+                "service.namespace" => {
+                    service_namespace = cfg.1.as_str();
+                    has_cloud = true;
+                }
+                "service.name" => {
+                    service_name = cfg.1.as_str();
+                    has_cloud = true;
+                }
+                "service.instance.id" => {
+                    service_instance_id = cfg.1.as_str();
+                    has_cloud = true;
+                }
+                "enduser.id" => enduser_id = cfg.1.as_str(),
+                // TODO: Part A ext "sdk.ver"
+                _ => (),
+            }
+        }
+
+        #[allow(non_snake_case)]
+        let mut partA_exts = HashMap::with_capacity(2);
+        if has_cloud {
+            let mut values = Vec::<(&'static str, Cow<str>)>::with_capacity(2);
+            if !service_name.is_empty() && !service_namespace.is_empty() {
+                values.push((
+                    "role",
+                    Cow::Owned(std::fmt::format(format_args!(
+                        "[{service_namespace}]/{service_name}"
+                    ))),
+                ));
+            } else if !service_name.is_empty() {
+                values.push(("role", service_name));
+            } else if !service_namespace.is_empty() {
+                values.push(("role", service_namespace));
+            }
+
+            if !service_instance_id.is_empty() {
+                values.push(("roleInstance", service_instance_id));
+            } else {
+                // TODO: Get machine hostname
+            }
+
+            partA_exts.insert("ext_cloud", values);
+        }
+
+        if !enduser_id.is_empty() {
+            let mut values = Vec::<(&'static str, Cow<str>)>::with_capacity(1);
+            values.push(("userId", enduser_id));
+
+            partA_exts.insert("ext_app", values);
+        }
+
+        partA_exts
+    }
+
+    fn write_common_schema_span<'a, T>(
         &mut self,
         tlg_provider: &Pin<&Provider>,
         name: &str,
@@ -484,7 +591,11 @@ impl EventBuilderWrapper {
         span_data: &SpanData,
         span_context: &SpanContext,
         export_payload_as_json: bool,
-    ) -> ExportResult {
+        attributes: T,
+    ) -> ExportResult
+    where
+        T: IntoIterator<Item = (&'a Key, &'a Value)>,
+    {
         let trace_id = span_context.trace_id().to_string();
         let span_id = span_context.span_id().to_string();
 
@@ -492,8 +603,10 @@ impl EventBuilderWrapper {
         self.reset(name, level, keywords, event_tags);
         self.opcode(Opcode::Info);
 
+        let exts = Self::extract_common_schema_parta_exts(attributes);
+
         self.add_u16("__csver__", 0x0401, OutType::Signed, 0);
-        self.add_struct("PartA", 2, 0);
+        self.add_struct("PartA", 2 + exts.len() as u8, 0);
         {
             let time: String = chrono::DateTime::to_rfc3339(
                 &chrono::DateTime::<chrono::Utc>::from(span_data.end_time),
@@ -504,6 +617,14 @@ impl EventBuilderWrapper {
             {
                 self.add_str8("traceId", &trace_id, OutType::Utf8, 0);
                 self.add_str8("spanId", &span_id, OutType::Utf8, 0);
+            }
+
+            for ext in exts {
+                self.add_struct(ext.0, ext.1.len() as u8, 0);
+
+                for field in ext.1 {
+                    self.add_str8(field.0, field.1.as_ref(), OutType::Utf8, 0);
+                }
             }
         }
 
@@ -625,7 +746,11 @@ impl EventBuilderWrapper {
     }
 
     // Called by the real-time exporter when a span is started
-    pub(crate) fn log_span_start<T>(&mut self, provider: &dyn EtwExporter, span: &T) -> ExportResult
+    pub(crate) fn log_span_start<T>(
+        &mut self,
+        provider: &EtwExporterConfig,
+        span: &T,
+    ) -> ExportResult
     where
         T: opentelemetry_api::trace::Span + EtwSpan,
     {
@@ -690,7 +815,7 @@ impl EventBuilderWrapper {
     }
 
     // Called by the real-time exporter when a span is ended
-    pub(crate) fn log_span_end<T>(&mut self, provider: &dyn EtwExporter, span: &T) -> ExportResult
+    pub(crate) fn log_span_end<T>(&mut self, provider: &EtwExporterConfig, span: &T) -> ExportResult
     where
         T: opentelemetry_api::trace::Span + EtwSpan,
     {
@@ -734,6 +859,7 @@ impl EventBuilderWrapper {
         if tlg_provider.enabled(Level::Informational, span_keywords)
             && provider.get_export_common_schema_event()
         {
+            let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
             self.write_common_schema_span(
                 &tlg_provider,
                 &span_data.name,
@@ -742,6 +868,7 @@ impl EventBuilderWrapper {
                 &span_data,
                 &span.span_context(),
                 export_payload_as_json,
+                attributes,
             )?;
         }
 
@@ -751,7 +878,7 @@ impl EventBuilderWrapper {
     // Called by the real-time exporter when an event is added to a span
     pub(crate) fn log_span_event<T>(
         &mut self,
-        provider: &dyn EtwExporter,
+        provider: &EtwExporterConfig,
         event: opentelemetry_api::trace::Event,
         span: &T,
     ) -> ExportResult
@@ -839,7 +966,7 @@ impl EventBuilderWrapper {
     // Called by the batch exporter sometime after span is completed
     pub(crate) fn log_span_data(
         &mut self,
-        provider: &dyn EtwExporter,
+        provider: &EtwExporterConfig,
         span_data: &SpanData,
     ) -> BoxFuture<'static, ExportResult> {
         let span_keywords = provider.get_span_keywords();
@@ -935,6 +1062,8 @@ impl EventBuilderWrapper {
         if tlg_provider.enabled(Level::Informational, span_keywords)
             && provider.get_export_common_schema_event()
         {
+            let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
+
             let err = self.write_common_schema_span(
                 &tlg_provider,
                 &span_data.name,
@@ -943,6 +1072,7 @@ impl EventBuilderWrapper {
                 span_data,
                 &span_data.span_context,
                 export_payload_as_json,
+                attributes,
             );
             if err.is_err() {
                 return Box::pin(std::future::ready(err));

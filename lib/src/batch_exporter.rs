@@ -2,22 +2,11 @@ use crate::constants::*;
 use crate::etw_exporter::*;
 use futures_util::future::BoxFuture;
 use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
-use std::{fmt::Debug, pin::Pin};
+use std::fmt::Debug;
 use tracelogging_dynamic::*;
 
-struct ExporterConfig {
-    provider: Pin<Box<Provider>>,
-    span_keywords: u64,
-    event_keywords: u64,
-    links_keywords: u64,
-    bool_intype: InType,
-    json: bool,
-    common_schema: bool,
-    etw_activities: bool,
-}
-
 pub struct BatchExporter {
-    config: ExporterConfig,
+    config: EtwExporterConfig,
     ebw: EventBuilderWrapper,
 }
 
@@ -37,7 +26,7 @@ impl BatchExporter {
             provider.as_ref().register();
         }
         BatchExporter {
-            config: ExporterConfig {
+            config: EtwExporterConfig {
                 provider,
                 span_keywords: 1,
                 event_keywords: 2,
@@ -59,40 +48,6 @@ impl BatchExporter {
 impl Debug for BatchExporter {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
-    }
-}
-
-impl EtwExporter for ExporterConfig {
-    fn get_provider(&self) -> Pin<&Provider> {
-        self.provider.as_ref()
-    }
-
-    fn get_span_keywords(&self) -> u64 {
-        self.span_keywords
-    }
-
-    fn get_event_keywords(&self) -> u64 {
-        self.event_keywords
-    }
-
-    fn get_links_keywords(&self) -> u64 {
-        self.links_keywords
-    }
-
-    fn get_bool_representation(&self) -> InType {
-        self.bool_intype
-    }
-
-    fn get_export_as_json(&self) -> bool {
-        self.json
-    }
-
-    fn get_export_common_schema_event(&self) -> bool {
-        self.common_schema
-    }
-
-    fn get_export_span_events(&self) -> bool {
-        self.etw_activities
     }
 }
 

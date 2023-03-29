@@ -47,8 +47,9 @@ fn main() {
 
     // std::thread::sleep(std::time::Duration::from_millis(1000));
 
-    let tracer2 =
-        otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name").with_common_schema_events().install_realtime();
+    let tracer2 = otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name")
+        .with_common_schema_events()
+        .install_realtime();
 
     tracer2.in_span("RealtimeOuterSpanName", |cx| {
         std::thread::sleep(std::time::Duration::from_millis(1000));
