@@ -3,6 +3,7 @@ name = "opentelemetry-etw"
 description = "OpenTelemetry-Rust Trace Span Exporter to ETW"
 version = "0.1.0"
 edition = "2021"
+resolver = "2"
 license = "Apache-2.0"
 repository = "https://github.com/Robo210/opentelemetry-etw-tracelogging"
 rust-version = "1.67"
@@ -10,7 +11,8 @@ authors = ["Kyle Sabo"]
 
 [features]
 json = ["dep:serde", "dep:serde_json"]
-default = []
+async = ["dep:tokio", "opentelemetry_sdk/rt-tokio"]
+default = ["async"]
 
 [lib]
 
@@ -24,7 +26,9 @@ futures-util = "0.3"
 chrono = {version="0.4", default-features = false, features=["std"]}
 serde = {version = "1.0", optional=true}
 serde_json = {version="1.0", optional=true}
+tokio = {version="1.0", optional=true, features=["rt-multi-thread", "rt"]}
 
 [dev-dependencies]
 windows = {version="0.46.0", features=["Win32_System_Diagnostics_Etw", "Win32_Foundation", "Win32_System_Time"]}
 futures = "0.3"
+tokio = {version="1.0", features=["full"]}

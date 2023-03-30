@@ -54,7 +54,7 @@ impl Debug for BatchExporter {
 impl SpanExporter for BatchExporter {
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
         for span in batch {
-            self.ebw.log_span_data(&mut self.config, &span);
+            self.ebw.log_span_data(&self.config, &span);
         }
 
         Box::pin(std::future::ready(Ok(())))

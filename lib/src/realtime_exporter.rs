@@ -1,18 +1,19 @@
 use crate::constants::*;
 use crate::etw_exporter::*;
-use opentelemetry::trace::TraceContextExt;
-use opentelemetry::trace::{
-    Event, SpanBuilder, SpanContext, SpanId, SpanKind, TraceFlags, TraceState,
+use opentelemetry::InstrumentationLibrary;
+use opentelemetry::{
+    trace::{
+        Event, SpanBuilder, SpanContext, SpanId, SpanKind, TraceContextExt, TraceFlags, TraceState,
+    },
+    Context,
 };
-use opentelemetry::Context;
 use opentelemetry_api::trace::SpanRef;
 use opentelemetry_sdk::{
     export::trace::SpanData,
     trace::{EvictedHashMap, EvictedQueue},
 };
 use std::borrow::Cow;
-use std::sync::Mutex;
-use std::sync::{atomic::*, Arc, Weak};
+use std::sync::{atomic::*, Arc, Mutex, Weak};
 use std::time::SystemTime;
 use tracelogging_dynamic::*;
 
@@ -29,6 +30,7 @@ impl RealtimeSpan {
         etw_config: Weak<EtwExporterConfig>,
         otel_config: Weak<opentelemetry_sdk::trace::Config>,
         parent_span: Option<SpanRef>,
+        instrumentation_lib: InstrumentationLibrary,
     ) -> Self {
         let parent_span_id =
             parent_span.map_or_else(|| SpanId::INVALID, |s| s.span_context().span_id());
@@ -69,7 +71,7 @@ impl RealtimeSpan {
                 links: EvictedQueue::new(otel_config.span_limits.max_links_per_span),
                 status: builder.status,
                 resource: otel_config.resource.clone(), // TODO: This is really inefficient
-                instrumentation_lib: Default::default(),   // TODO
+                instrumentation_lib // TODO: Currently this is never used, so making all the copies of it is wasteful
             },
             ended: AtomicBool::new(false),
         };
@@ -187,17 +189,19 @@ impl EtwSpan for RealtimeSpan {
 pub struct RealtimeTracer {
     etw_config: Weak<EtwExporterConfig>,
     otel_config: Weak<opentelemetry_sdk::trace::Config>,
+    instrumentation_lib: InstrumentationLibrary,
 }
 
 impl RealtimeTracer {
     fn new(
         etw_config: Weak<EtwExporterConfig>,
         otel_config: Weak<opentelemetry_sdk::trace::Config>,
-        lib: opentelemetry_api::InstrumentationLibrary,
+        instrumentation_lib: InstrumentationLibrary,
     ) -> Self {
         RealtimeTracer {
             etw_config,
             otel_config,
+            instrumentation_lib,
         }
     }
 }
@@ -217,6 +221,7 @@ impl opentelemetry_api::trace::Tracer for RealtimeTracer {
             self.etw_config.clone(),
             self.otel_config.clone(),
             parent_span,
+            self.instrumentation_lib.clone(),
         );
         span.start();
         span
@@ -287,7 +292,7 @@ impl opentelemetry_api::trace::TracerProvider for RealtimeTracerProvider {
         } else {
             name
         };
-        let instrumentation_lib = opentelemetry_api::InstrumentationLibrary::new(
+        let instrumentation_lib = InstrumentationLibrary::new(
             component_name,
             version.map(Into::into),
             schema_url.map(Into::into),

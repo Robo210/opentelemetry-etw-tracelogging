@@ -37,13 +37,13 @@ impl EtwExporterBuilder {
 
     /// Get the current provider ID that will be used for the ETW provider.
     /// This is a convenience function to help with tools that do not implement
-    /// the standard provider name to ID  algorithm.
+    /// the standard provider name to ID algorithm.
     pub fn get_provider_id(&self) -> Guid {
         self.provider_id
     }
 
     /// Log bool attributes using an InType of `xs:byte` instead of `win:Boolean`.
-    /// This is non-standard and not recommended except if compatability with the
+    /// This is non-standard and not recommended except if compatibility with the
     /// C++ ETW exporter is required.
     pub fn with_byte_sized_bools(mut self) -> Self {
         self.use_byte_for_bools = true;
@@ -62,7 +62,8 @@ impl EtwExporterBuilder {
     /// the textual representation of the event payload should be left to the event
     /// consumer.
     /// Requires the `json` feature to be enabled on the crate.
-    #[cfg(any(feature = "json", doc))]
+    #[cfg(any(feature = "json"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
     pub fn with_json_payload(mut self) -> Self {
         self.json = true;
         self
@@ -92,11 +93,17 @@ impl EtwExporterBuilder {
         self
     }
 
-    /// Install the exporter as a "simple" span exporter.
+    /// Install the exporter as a batch span exporter.
     /// Spans will be exported some time after the span has ended.
     /// The timestamps of the ETW events, and the duration of time between
     /// events, will not be accurate.
-    pub fn install_simple(mut self) -> opentelemetry_sdk::trace::Tracer {
+    /// Requires the "async" feature to be enabled on the crate.
+    #[cfg(any(feature = "async"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+    pub fn install_batch<R: opentelemetry_sdk::trace::TraceRuntime>(
+        mut self,
+        runtime: R,
+    ) -> opentelemetry_sdk::trace::Tracer {
         let exporter = BatchExporter::new(
             &self.provider_name,
             self.use_byte_for_bools,
@@ -105,8 +112,8 @@ impl EtwExporterBuilder {
             !self.emit_only_common_schema_events,
         );
 
-        let provider_builder =
-            opentelemetry_sdk::trace::TracerProvider::builder().with_simple_exporter(exporter);
+        let provider_builder = opentelemetry_sdk::trace::TracerProvider::builder()
+            .with_batch_exporter(exporter, runtime);
 
         let builder = if let Some(config) = self.trace_config.take() {
             provider_builder.with_config(config)
@@ -116,14 +123,17 @@ impl EtwExporterBuilder {
 
         let provider = builder.build();
 
-        let tracer =
-            provider.versioned_tracer("opentelemetry-etw", Some(env!("CARGO_PKG_VERSION")), None);
+        let tracer = provider.versioned_tracer(
+            "opentelemetry-etw",
+            Some(env!("CARGO_PKG_VERSION")),
+            Some("https://microsoft.com/etw"),
+        );
         let _ = global::set_tracer_provider(provider);
 
         tracer
     }
 
-    /// Install the exporter as a span processor.
+    /// Install the exporter as a tracer provider.
     /// Spans will be exported almost immediately after they are started
     /// and ended. Events that were added to the span will be exported
     /// at the same time as the end event. The timestamps of the start
@@ -144,8 +154,11 @@ impl EtwExporterBuilder {
             !self.emit_only_common_schema_events,
         );
 
-        let tracer =
-            provider.versioned_tracer("opentelemetry-etw", Some(env!("CARGO_PKG_VERSION")), None);
+        let tracer = provider.versioned_tracer(
+            "opentelemetry-etw",
+            Some(env!("CARGO_PKG_VERSION")),
+            Some("https://microsoft.com/etw"),
+        );
         let _ = global::set_tracer_provider(provider);
 
         tracer
@@ -186,9 +199,13 @@ mod tests {
         );
     }
 
-    #[test]
-    fn install_simple() {
-        new_etw_exporter("my_provider_name").install_simple();
+    #[cfg(any(feature = "async"))]
+    #[tokio::test]
+    async fn install_batch() {
+        new_etw_exporter("my_provider_name")
+            .with_common_schema_events()
+            .without_normal_events()
+            .install_batch(opentelemetry_sdk::runtime::Tokio);
     }
 
     #[test]

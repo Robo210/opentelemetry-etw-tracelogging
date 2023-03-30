@@ -291,9 +291,8 @@ impl EventBuilderWrapper {
             }
         }
 
-        let json_string = serde_json::to_string(&payload);
-        if json_string.is_ok() {
-            self.add_str8("Payload", &json_string.unwrap(), OutType::Json, 0);
+        if let Ok(json_string) = serde_json::to_string(&payload) {
+            self.add_str8("Payload", &json_string, OutType::Json, 0);
         }
     }
 
@@ -573,8 +572,7 @@ impl EventBuilderWrapper {
         }
 
         if !enduser_id.is_empty() {
-            let mut values = Vec::<(&'static str, Cow<str>)>::with_capacity(1);
-            values.push(("userId", enduser_id));
+            let values:Vec<(&str, Cow<str>)> = vec![("userId", enduser_id)];
 
             partA_exts.insert("ext_app", values);
         }
@@ -805,7 +803,7 @@ impl EventBuilderWrapper {
             Level::Verbose,
             links_keywords,
             &activities,
-            &&span_data.name,
+            &span_data.name,
             &span_data.start_time,
             &mut span_data.links.iter(),
             use_byte_for_bools,
@@ -865,8 +863,8 @@ impl EventBuilderWrapper {
                 &span_data.name,
                 Level::Informational,
                 span_keywords,
-                &span_data,
-                &span.span_context(),
+                span_data,
+                span.span_context(),
                 export_payload_as_json,
                 attributes,
             )?;

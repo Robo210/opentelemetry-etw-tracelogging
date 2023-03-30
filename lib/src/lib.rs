@@ -63,7 +63,7 @@
 //! ## Batch Exporter
 //!
 //! The Batch Exporter is for advanced scenarios, in particular for emitting only
-//! Common Schema 4.0 events, or for closer compatibility with the behavior of the 
+//! Common Schema 4.0 events, or for closer compatibility with the behavior of the
 //! OpenTelemetry-C++ ETW exporter. Spans are exported asynchronously and in batches.
 //! Because of this, the timestamps on the ETW events do not represent the time the span
 //! was originally started or ended.
@@ -77,7 +77,7 @@
 //! on the EVENT_RECORD should be ignored when processing the event.
 //! To get the real time of the event, look for a field tagged with
 //! [`constants::FIELD_TAG_IS_REAL_EVENT_TIME`].
-//! 
+//!
 //! Common Schema 4.0 events do not use tags, as the payload schema supersedes the need to do so.
 //!
 //! ### Example
@@ -104,7 +104,7 @@
 //! Links are not (currently) supported by the JSON exporter option (described below).
 //!
 //! ## Differences with OpenTelemetry-C++ ETW Exporter
-//! 
+//!
 //! ETW events not logged in the Common Schema 4.0 format will be different from how the
 //! [OpenTelemetry-C++ ETW Exporter](https://github.com/open-telemetry/opentelemetry-cpp/tree/main/exporters/etw)
 //! would log them. Some of these differences can controlled, as described below.
