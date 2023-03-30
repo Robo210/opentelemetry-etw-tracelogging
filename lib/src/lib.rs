@@ -31,9 +31,8 @@
 //! Events attached to the span are logged with keyword 2 and [`tracelogging::Level::Verbose`].
 //! Span Links are logged as events with keyword 4 and [`tracelogging::Level::Verbose`].
 //!
-//! ## ETW Timestamps
 //!
-//! ### Realtime Exporter
+//! ## Realtime Exporter
 //!
 //! The real-time exporter should be the one used for almost all scenarios.
 //! ETW events for span start and stop, as well as events added to the span,
@@ -45,7 +44,7 @@
 //! is not available at the start of a span. Attributes and other data are only guaranteed
 //! to be present on span end events.
 //!
-//! #### Example
+//! ### Example
 //!
 //! ```no_run
 //! use opentelemetry_api::global::shutdown_tracer_provider;
@@ -61,9 +60,10 @@
 //! shutdown_tracer_provider(); // sending remaining spans
 //! ```
 //!
-//! ### Batch Exporter
+//! ## Batch Exporter
 //!
-//! The Batch Exporter is for advanced scenarios, mostly around compatability with the
+//! The Batch Exporter is for advanced scenarios, in particular for emitting only
+//! Common Schema 4.0 events, or for closer compatibility with the behavior of the 
 //! OpenTelemetry-C++ ETW exporter. Spans are exported asynchronously and in batches.
 //! Because of this, the timestamps on the ETW events do not represent the time the span
 //! was originally started or ended.
@@ -77,8 +77,10 @@
 //! on the EVENT_RECORD should be ignored when processing the event.
 //! To get the real time of the event, look for a field tagged with
 //! [`constants::FIELD_TAG_IS_REAL_EVENT_TIME`].
+//! 
+//! Common Schema 4.0 events do not use tags, as the payload schema supersedes the need to do so.
 //!
-//! #### Example
+//! ### Example
 //! ```no_run
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
@@ -95,13 +97,17 @@
 //!
 //! ## Span Links
 //!
-//! Each span link is exported as a separate ETW event. The ETW event's name will
-//! match the span start event's name, and the link event's activity ID will match
-//! the span's activity ID. A `Link` field in the payload contains the linked
-//! span's ID, and any attributes for the link will be logged as additional paylod fields.
+//! For non-Common Schema 4.0 events, each span link is exported as a separate ETW event.
+//! The ETW event's name will match the span start event's name, and the link event's activity ID
+//! will match the span's activity ID. A `Link` field in the payload contains the linked
+//! span's ID, and any attributes for the link will be logged as additional payload fields.
 //! Links are not (currently) supported by the JSON exporter option (described below).
 //!
-//! ## Differences with [OpenTelemetry-C++ ETW Exporter](https://github.com/open-telemetry/opentelemetry-cpp/tree/main/exporters/etw)
+//! ## Differences with OpenTelemetry-C++ ETW Exporter
+//! 
+//! ETW events not logged in the Common Schema 4.0 format will be different from how the
+//! [OpenTelemetry-C++ ETW Exporter](https://github.com/open-telemetry/opentelemetry-cpp/tree/main/exporters/etw)
+//! would log them. Some of these differences can controlled, as described below.
 //!
 //! - Spans are represented as ETW events differently.
 //!   - The C++ exporter emits one ETW event for each span, when the span is completed. This event contains a
@@ -120,7 +126,7 @@
 //! - The OpenTelemetry-C++ SDK supports non-standard value types such as 32-bit and unsigned values, as well as
 //! optionally GUIDs, which are emitted as their corresponding InTypes.
 //! The OpenTelemetry-Rust crate only supports the types listed in the OpenTelemetry standard, and the exporter will not
-//! attempt to values into non-standard types in the ETW event.
+//! attempt to coerce values into other types in the ETW event.
 //! - The C++ exporter does not support arrays and instead emits strings containing comma-separated
 //! values. The Rust exporter emits arrays of the corresponding type.
 //! - The C++ exporter can combine all attributes into a single JSON string that is then encoded with MsgPack,
@@ -136,7 +142,7 @@
 //!   - The C++ exporter does not tag its ETW events or fields containing the "real" timestamp for a span or event.
 //!   - The Rust exporter uses the same field names as the C++ exporter whenever possible.
 //! - The C++ exporter and Rust exporter use different algorithms to generate activity IDs from span IDs.
-//! This should not be noticable as span IDs and activity IDs should always be unique.
+//! This should not be noticeable as span IDs and activity IDs should always be unique.
 //!   - The C++ exporter (currently) copies the 8-byte span ID into the 16-byte activity ID GUID, leaving the
 //!   remaining 8 bytes empty. This makes the GUID non-compliant, and the uniqueness guarantees of a GUID/LUID
 //!   cannot be applied to activities IDs generated in this way.

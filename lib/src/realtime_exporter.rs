@@ -68,7 +68,7 @@ impl RealtimeSpan {
                 events: EvictedQueue::new(otel_config.span_limits.max_events_per_span),
                 links: EvictedQueue::new(otel_config.span_limits.max_links_per_span),
                 status: builder.status,
-                resource: otel_config.resource.to_owned(), // TODO: This is really inefficient
+                resource: otel_config.resource.clone(), // TODO: This is really inefficient
                 instrumentation_lib: Default::default(),   // TODO
             },
             ended: AtomicBool::new(false),

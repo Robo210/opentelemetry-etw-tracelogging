@@ -71,8 +71,12 @@ impl EtwExporterBuilder {
     /// For advanced scenarios.
     /// Emit extra events that follow the Common Schema 4.0 mapping.
     /// Recommended only for compatibility with specialized event consumers.
-    /// Most ETW consumers will not benefit from events in this schema, and may perform worse.
-    /// These events are emitted in addition to the normal ETW events.
+    /// Most ETW consumers will not benefit from events in this schema, and
+    /// may perform worse.
+    /// These events are emitted in addition to the normal ETW events,
+    /// unless `without_normal_events` is also called.
+    /// Common Schema events take longer to generate, and should only be
+    /// used with the Batch Exporter.
     pub fn with_common_schema_events(mut self) -> Self {
         self.emit_common_schema_events = true;
         self
@@ -89,9 +93,9 @@ impl EtwExporterBuilder {
     }
 
     /// Install the exporter as a "simple" span exporter.
-    /// Spans will be automatically batched and exported some time after
-    /// the span has ended. The timestamps of the ETW events, and the
-    /// duration of time between events, will not be accurate.
+    /// Spans will be exported some time after the span has ended.
+    /// The timestamps of the ETW events, and the duration of time between
+    /// events, will not be accurate.
     pub fn install_simple(mut self) -> opentelemetry_sdk::trace::Tracer {
         let exporter = BatchExporter::new(
             &self.provider_name,
