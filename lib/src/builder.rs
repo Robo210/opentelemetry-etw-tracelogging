@@ -100,7 +100,7 @@ impl EtwExporterBuilder {
     /// Requires the "async" feature to be enabled on the crate.
     #[cfg(any(feature = "async"))]
     #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
-    pub fn install_batch<R: opentelemetry_sdk::trace::TraceRuntime>(
+    pub fn install_batch<R: opentelemetry_sdk::trace::TraceRuntime + Clone>(
         mut self,
         runtime: R,
     ) -> opentelemetry_sdk::trace::Tracer {
@@ -165,7 +165,7 @@ impl EtwExporterBuilder {
     }
 }
 
-#[allow(unused_imports)]
+#[cfg(test)]
 mod tests {
     use super::*;
 

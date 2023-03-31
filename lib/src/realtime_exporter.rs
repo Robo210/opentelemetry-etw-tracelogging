@@ -71,7 +71,7 @@ impl RealtimeSpan {
                 links: EvictedQueue::new(otel_config.span_limits.max_links_per_span),
                 status: builder.status,
                 resource: otel_config.resource.clone(), // TODO: This is really inefficient
-                instrumentation_lib // TODO: Currently this is never used, so making all the copies of it is wasteful
+                instrumentation_lib, // TODO: Currently this is never used, so making all the copies of it is wasteful
             },
             ended: AtomicBool::new(false),
         };
@@ -242,7 +242,7 @@ impl RealtimeTracerProvider {
         common_schema: bool,
         etw_activities: bool,
     ) -> Self {
-        let provider = Box::pin(Provider::new(
+        let provider = Arc::pin(Provider::new(
             provider_name,
             Provider::options().group_id(&GROUP_ID),
         ));

@@ -86,7 +86,7 @@
 //! use opentelemetry_api::trace::Tracer;
 //!
 //! let tracer = opentelemetry_etw::span_exporter::new_etw_exporter("MyEtwProviderName")
-//!     .install_simple();
+//!     .install_batch(opentelemetry_sdk::runtime::Tokio);
 //!
 //! tracer.in_span("doing_work", |cx| {
 //!     // Traced app logic here...

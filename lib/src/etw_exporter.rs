@@ -1,7 +1,6 @@
 use crate::constants::*;
 use crate::error::*;
 use chrono::{Datelike, Timelike};
-use futures_util::future::BoxFuture;
 use opentelemetry::Array;
 use opentelemetry::{
     trace::{Event, Link, SpanContext, SpanId, SpanKind, Status, TraceError, TraceId},
@@ -10,11 +9,13 @@ use opentelemetry::{
 use opentelemetry_sdk::export::trace::{ExportResult, SpanData};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::{pin::Pin, time::SystemTime};
 use tracelogging_dynamic::*;
 
+#[derive(Clone)]
 pub(crate) struct EtwExporterConfig {
-    pub(crate) provider: Pin<Box<Provider>>,
+    pub(crate) provider: Pin<Arc<Provider>>,
     pub(crate) span_keywords: u64,
     pub(crate) event_keywords: u64,
     pub(crate) links_keywords: u64,
@@ -572,7 +573,7 @@ impl EventBuilderWrapper {
         }
 
         if !enduser_id.is_empty() {
-            let values:Vec<(&str, Cow<str>)> = vec![("userId", enduser_id)];
+            let values: Vec<(&str, Cow<str>)> = vec![("userId", enduser_id)];
 
             partA_exts.insert("ext_app", values);
         }
@@ -966,7 +967,7 @@ impl EventBuilderWrapper {
         &mut self,
         provider: &EtwExporterConfig,
         span_data: &SpanData,
-    ) -> BoxFuture<'static, ExportResult> {
+    ) -> ExportResult {
         let span_keywords = provider.get_span_keywords();
         let event_keywords = provider.get_event_keywords();
         let links_keywords = provider.get_links_keywords();
@@ -984,6 +985,7 @@ impl EventBuilderWrapper {
             Status::Unset => Level::Verbose,
         };
 
+        let mut err = Ok(());
         if tlg_provider.enabled(level, span_keywords) && provider.get_export_span_events() {
             let activities = Activities::generate(
                 &span_data.span_context.span_id(),
@@ -991,93 +993,84 @@ impl EventBuilderWrapper {
                 &span_data.span_context.trace_id(),
             );
 
-            let mut err = self.write_span_event(
-                &tlg_provider,
-                &span_data.name,
-                level,
-                span_keywords,
-                &activities,
-                &span_data.start_time,
-                Some(&span_data.span_kind),
-                &span_data.status,
-                &mut std::iter::empty(),
-                true,
-                true,
-                use_byte_for_bools,
-                export_payload_as_json,
-            );
-            if err.is_err() {
-                return Box::pin(std::future::ready(err));
-            }
-
-            err = self.write_span_events(
-                &tlg_provider,
-                Level::Verbose,
-                event_keywords,
-                &activities,
-                &mut span_data.events.iter(),
-                use_byte_for_bools,
-                export_payload_as_json,
-            );
-            if err.is_err() {
-                return Box::pin(std::future::ready(err));
-            }
-
-            err = self.write_span_links(
-                &tlg_provider,
-                Level::Verbose,
-                links_keywords,
-                &activities,
-                &span_data.name,
-                &span_data.start_time,
-                &mut span_data.links.iter(),
-                use_byte_for_bools,
-            );
-            if err.is_err() {
-                return Box::pin(std::future::ready(err));
-            }
-
-            err = self.write_span_event(
-                &tlg_provider,
-                &span_data.name,
-                level,
-                span_keywords,
-                &activities,
-                &span_data.end_time,
-                Some(&span_data.span_kind),
-                &span_data.status,
-                &mut span_data.attributes.iter(),
-                false,
-                true,
-                use_byte_for_bools,
-                export_payload_as_json,
-            );
-            if err.is_err() {
-                return Box::pin(std::future::ready(err));
-            }
+            err = self
+                .write_span_event(
+                    &tlg_provider,
+                    &span_data.name,
+                    level,
+                    span_keywords,
+                    &activities,
+                    &span_data.start_time,
+                    Some(&span_data.span_kind),
+                    &span_data.status,
+                    &mut std::iter::empty(),
+                    true,
+                    true,
+                    use_byte_for_bools,
+                    export_payload_as_json,
+                )
+                .and_then(|_| {
+                    self.write_span_events(
+                        &tlg_provider,
+                        Level::Verbose,
+                        event_keywords,
+                        &activities,
+                        &mut span_data.events.iter(),
+                        use_byte_for_bools,
+                        export_payload_as_json,
+                    )
+                })
+                .and_then(|_| {
+                    self.write_span_links(
+                        &tlg_provider,
+                        Level::Verbose,
+                        links_keywords,
+                        &activities,
+                        &span_data.name,
+                        &span_data.start_time,
+                        &mut span_data.links.iter(),
+                        use_byte_for_bools,
+                    )
+                })
+                .and_then(|_| {
+                    self.write_span_event(
+                        &tlg_provider,
+                        &span_data.name,
+                        level,
+                        span_keywords,
+                        &activities,
+                        &span_data.end_time,
+                        Some(&span_data.span_kind),
+                        &span_data.status,
+                        &mut span_data.attributes.iter(),
+                        false,
+                        true,
+                        use_byte_for_bools,
+                        export_payload_as_json,
+                    )
+                });
         }
 
         if tlg_provider.enabled(Level::Informational, span_keywords)
             && provider.get_export_common_schema_event()
         {
-            let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
+                let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
 
-            let err = self.write_common_schema_span(
-                &tlg_provider,
-                &span_data.name,
-                Level::Informational,
-                span_keywords,
-                span_data,
-                &span_data.span_context,
-                export_payload_as_json,
-                attributes,
-            );
-            if err.is_err() {
-                return Box::pin(std::future::ready(err));
-            }
+                let err2 = self.write_common_schema_span(
+                    &tlg_provider,
+                    &span_data.name,
+                    Level::Informational,
+                    span_keywords,
+                    span_data,
+                    &span_data.span_context,
+                    export_payload_as_json,
+                    attributes,
+                );
+
+            err = err.and(err2);
         }
 
-        Box::pin(std::future::ready(Ok(())))
+        err
     }
 }
 

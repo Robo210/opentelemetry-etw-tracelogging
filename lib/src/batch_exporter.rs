@@ -3,6 +3,7 @@ use crate::etw_exporter::*;
 use futures_util::future::BoxFuture;
 use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
 use std::fmt::Debug;
+use std::sync::Arc;
 use tracelogging_dynamic::*;
 
 pub struct BatchExporter {
@@ -18,7 +19,7 @@ impl BatchExporter {
         common_schema: bool,
         etw_activities: bool,
     ) -> Self {
-        let provider = Box::pin(Provider::new(
+        let provider = Arc::pin(Provider::new(
             provider_name,
             Provider::options().group_id(&GROUP_ID),
         ));
@@ -54,19 +55,26 @@ impl Debug for BatchExporter {
 impl SpanExporter for BatchExporter {
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
         for span in batch {
-            self.ebw.log_span_data(&self.config, &span);
+            let _ = self.ebw.log_span_data(&self.config, &span);
         }
 
         Box::pin(std::future::ready(Ok(())))
     }
 }
 
-#[allow(unused_imports)]
+#[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn create_batch_exporter() {
-        let _ = BatchExporter::new("my_provider_name", true, true, true, true);
+    #[cfg(any(feature = "async"))]
+    #[tokio::test]
+    async fn create_batch_exporter() {
+        let _ = BatchExporter::new(
+            "my_provider_name",
+            true,
+            true,
+            true,
+            true,
+        );
     }
 }
