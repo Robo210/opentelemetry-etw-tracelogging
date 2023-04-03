@@ -511,6 +511,7 @@ impl EventBuilderWrapper {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn extract_common_schema_parta_exts<'a, T>(
         attributes: T,
     ) -> HashMap<&'static str, Vec<(&'static str, Cow<'a, str>)>>
@@ -602,10 +603,12 @@ impl EventBuilderWrapper {
         self.reset(name, level, keywords, event_tags);
         self.opcode(Opcode::Info);
 
-        let exts = Self::extract_common_schema_parta_exts(attributes);
+        // Promoting values from PartC to PartA extensions is apparently just a draft spec
+        // and not necessary / supported by consumers.
+        // let exts = Self::extract_common_schema_parta_exts(attributes);
 
         self.add_u16("__csver__", 0x0401, OutType::Signed, 0);
-        self.add_struct("PartA", 2 + exts.len() as u8, 0);
+        self.add_struct("PartA", 2 /* + exts.len() as u8*/, 0);
         {
             let time: String = chrono::DateTime::to_rfc3339(
                 &chrono::DateTime::<chrono::Utc>::from(span_data.end_time),
@@ -618,13 +621,13 @@ impl EventBuilderWrapper {
                 self.add_str8("spanId", &span_id, OutType::Utf8, 0);
             }
 
-            for ext in exts {
-                self.add_struct(ext.0, ext.1.len() as u8, 0);
+            // for ext in exts {
+            //     self.add_struct(ext.0, ext.1.len() as u8, 0);
 
-                for field in ext.1 {
-                    self.add_str8(field.0, field.1.as_ref(), OutType::Utf8, 0);
-                }
-            }
+            //     for field in ext.1 {
+            //         self.add_str8(field.0, field.1.as_ref(), OutType::Utf8, 0);
+            //     }
+            // }
         }
 
         // if !span_data.links.is_empty() {
@@ -1054,18 +1057,18 @@ impl EventBuilderWrapper {
         if tlg_provider.enabled(Level::Informational, span_keywords)
             && provider.get_export_common_schema_event()
         {
-                let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
+            let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
 
-                let err2 = self.write_common_schema_span(
-                    &tlg_provider,
-                    &span_data.name,
-                    Level::Informational,
-                    span_keywords,
-                    span_data,
-                    &span_data.span_context,
-                    export_payload_as_json,
-                    attributes,
-                );
+            let err2 = self.write_common_schema_span(
+                &tlg_provider,
+                &span_data.name,
+                Level::Informational,
+                span_keywords,
+                span_data,
+                &span_data.span_context,
+                export_payload_as_json,
+                attributes,
+            );
 
             err = err.and(err2);
         }

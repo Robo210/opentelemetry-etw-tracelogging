@@ -69,12 +69,6 @@ mod tests {
     #[cfg(any(feature = "async"))]
     #[tokio::test]
     async fn create_batch_exporter() {
-        let _ = BatchExporter::new(
-            "my_provider_name",
-            true,
-            true,
-            true,
-            true,
-        );
+        let _ = BatchExporter::new("my_provider_name", true, true, true, true);
     }
 }
