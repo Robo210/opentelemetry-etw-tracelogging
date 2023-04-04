@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     ffi::c_void,
     marker::PhantomData,
     mem::ManuallyDrop,
@@ -181,6 +182,7 @@ impl ControlTraceHandle {
             MaximumBuffers: 4,
             LogFileMode: EVENT_TRACE_FILE_MODE_NONE | EVENT_TRACE_REAL_TIME_MODE,
             NumberOfBuffers: 4,
+            FlushTimer: 1,
 
             ..properties.props
         };
@@ -325,23 +327,6 @@ impl<'a, C> ProcessTraceHandle<'a, C>
 where
     C: EventConsumer + Unpin + Send + Sync + 'a,
 {
-    unsafe extern "system" fn event_record_callback(event_record: *mut EVENT_RECORD) {
-        let ctx = (*event_record).UserContext as *mut InnerProcessTraceHandle<'a, C>;
-        if ctx != core::ptr::null_mut() {
-            // It's not safe to let a panic cross back into C code.
-            // Use AssertUnwindSafe because we will always abort in the event of a panic.
-            let err = catch_unwind(AssertUnwindSafe(|| {
-                let result = (*ctx).inner_callback(event_record);
-                if result.is_err() {
-                    (*ctx).close_trace();
-                }
-            }));
-            if err.is_err() {
-                std::process::abort();
-            }
-        }
-    }
-
     pub fn from_session(
         session_name: PCSTR,
         consumer: &'a C,
@@ -383,6 +368,23 @@ where
     //         }
     //     }
     // }
+
+    unsafe extern "system" fn event_record_callback(event_record: *mut EVENT_RECORD) {
+        let ctx = (*event_record).UserContext as *mut InnerProcessTraceHandle<'a, C>;
+        if ctx != core::ptr::null_mut() {
+            // It's not safe to let a panic cross back into C code.
+            // Use AssertUnwindSafe because we will always abort in the event of a panic.
+            let err = catch_unwind(AssertUnwindSafe(|| {
+                let result = (*ctx).inner_callback(event_record);
+                if result.is_err() {
+                    (*ctx).close_trace();
+                }
+            }));
+            if err.is_err() {
+                std::process::abort();
+            }
+        }
+    }
 
     pub fn process_trace(mut self) -> Result<ProcessTraceThread<'a, C>, windows::core::Error> {
         let inner =
@@ -479,15 +481,18 @@ impl<'a> EventConsumer for EtwEventConsumer<'a> {
             );
             if event_consumer_ready.is_err() {
                 guard = self.waiter.lock().unwrap();
-                let result = self
-                    .next_event_consumer_set
-                    .wait_timeout(guard, Duration::new(20, 0))
-                    .unwrap();
-                if result.1.timed_out() {
-                    return Err(windows::core::HRESULT(-2147023436i32).into()); // HRESULT_FROM_WIN32(ERROR_TIMEOUT)
-                } else {
-                    guard = result.0;
-                    break;
+                if guard.is_none() {
+                    let result = self
+                        .next_event_consumer_set
+                        .wait_timeout(guard, Duration::new(10, 0))
+                        .unwrap();
+                    if result.1.timed_out() {
+                        println!("waiting for consume to release current event timed out");
+                        return Err(windows::core::HRESULT(-2147023436i32).into()); // HRESULT_FROM_WIN32(ERROR_TIMEOUT)
+                    } else {
+                        guard = result.0;
+                        break;
+                    }
                 }
             } else {
                 guard = self.waiter.lock().unwrap();
@@ -495,7 +500,7 @@ impl<'a> EventConsumer for EtwEventConsumer<'a> {
             }
         }
 
-        if let Some(f) = &*guard {
+        if let Some(f) = guard.take() {
             let should_continue = f(evt);
             *self.waiter2.lock().unwrap() = true;
             self.event_callback_completed.notify_one();
@@ -549,9 +554,10 @@ impl<'a> EtwEventConsumer<'a> {
             if *guard == false {
                 let mut result = self
                     .event_callback_completed
-                    .wait_timeout(guard, Duration::new(20, 0))
+                    .wait_timeout(guard, Duration::new(10, 0))
                     .unwrap();
                 if result.1.timed_out() {
+                    println!("waiting for next event timed out");
                     return Err::<(), windows::core::Error>(
                         windows::core::HRESULT(-2147023436i32).into(),
                     ); // HRESULT_FROM_WIN32(ERROR_TIMEOUT)
@@ -692,16 +698,106 @@ impl<'a> Deref for EventRecord<'a> {
     }
 }
 
+struct EtwEventConsumer2Consumer {
+    tx: Mutex<futures::channel::mpsc::Sender<AtomicPtr<EVENT_RECORD>>>,
+}
+
+impl EventConsumer for EtwEventConsumer2Consumer {
+    unsafe fn on_event_raw(&self, evt: *mut EVENT_RECORD) -> Result<(), windows::core::Error> {
+        futures::executor::block_on(async {
+            let send_result = self.tx.lock().unwrap().send(AtomicPtr::new(evt)).await;
+            if send_result.is_err() {
+                panic!();
+            }
+            Ok(())
+        })
+    }
+
+    fn on_event(&self, _evt: &EVENT_RECORD) -> Result<(), windows::core::Error> {
+        Ok(())
+    }
+
+    fn complete(&self, _err: windows::core::Error) {
+        futures::executor::block_on(async {
+            let _ = self.tx.lock().unwrap().close();
+        });
+    }
+}
+
+pub struct EtwEventConsumer2 {
+    tx: Option<futures::channel::mpsc::Sender<AtomicPtr<EVENT_RECORD>>>,
+    rx: RefCell<futures::channel::mpsc::Receiver<AtomicPtr<EVENT_RECORD>>>,
+}
+
+impl EtwEventConsumer2 {
+    pub fn new() -> EtwEventConsumer2 {
+        let (tx, rx) = futures::channel::mpsc::channel::<AtomicPtr<EVENT_RECORD>>(0);
+        EtwEventConsumer2 {
+            tx: Some(tx),
+            rx: RefCell::new(rx),
+        }
+    }
+
+    pub fn get_consumer(&mut self) -> impl EventConsumer {
+        EtwEventConsumer2Consumer {
+            tx: Mutex::new(self.tx.take().unwrap()),
+        }
+    }
+
+    pub async fn expect_event<F>(&self, f: F) -> Result<(), windows::core::Error>
+    where
+        F: Fn(&EVENT_RECORD) -> bool + Send + Sync,
+    {
+        let next_event = self.rx.borrow_mut().next().await;
+        let next_event_record = unsafe { &*(next_event.unwrap().load(Ordering::Acquire)) };
+
+        let should_continue = f(next_event_record);
+        if !should_continue {
+            self.rx.borrow_mut().close();
+            //return Err(windows::core::HRESULT(-2147023673).into()); // HRESULT_FROM_WIN32(ERROR_CANCELLED)
+        }
+
+        return Ok::<(), windows::core::Error>(());
+    }
+}
+
 #[cfg(test)]
 #[allow(dead_code, non_upper_case_globals)]
 mod tests {
+    use rsevents::Awaitable;
+    use tracelogging::{Guid, Level};
+
     use super::*;
+
+    fn provider_enabled_callback(
+        _source_id: &Guid,
+        _event_control_code: u32,
+        _level: Level,
+        _match_any_keyword: u64,
+        _match_all_keyword: u64,
+        _filter_data: usize,
+        callback_context: usize,
+    ) {
+        unsafe {
+            let ctx = &*(callback_context as *const c_void as *const rsevents::ManualResetEvent);
+            ctx.set();
+        }
+    }
+
+    static consume_event_enabled_event: rsevents::ManualResetEvent =
+        rsevents::ManualResetEvent::new(rsevents::EventState::Unset);
 
     #[test]
     fn consume_event() -> Result<(), windows::core::Error> {
         const sz_test_name: PCSTR = windows::s!("EtwConsumer-Rust-Tests-ConsumeEvent");
 
-        let provider = Box::pin(tracelogging_dynamic::Provider::new("consume_event_test", &tracelogging_dynamic::Provider::options()));
+        let mut options = tracelogging_dynamic::Provider::options();
+        let options = options.callback(provider_enabled_callback, &consume_event_enabled_event as *const rsevents::ManualResetEvent as usize);
+
+        let provider = Box::pin(tracelogging_dynamic::Provider::new(
+            "consume_event_test",
+            &options,
+        ));
         unsafe {
             provider.as_ref().register();
         }
@@ -717,12 +813,14 @@ mod tests {
 
         let trace = ProcessTraceHandle::from_session(sz_test_name, &consumer)?;
 
+        consume_event_enabled_event.wait();
+
         eb.reset("test event", tracelogging::Level::LogAlways, 1, 0);
         eb.write(&provider, None, None);
 
         let fut = consumer.expect_event(|evt: &EVENT_RECORD| {
             if evt.EventHeader.ProviderId == provider_guid {
-                println!("Found event from provider!");
+                println!("Found event from provider! {}", evt.EventHeader.EventDescriptor.Keyword);
                 true
             } else {
                 false
@@ -731,8 +829,12 @@ mod tests {
 
         let mut thread = trace.process_trace()?;
 
-        let fut2 = consumer.expect_event(|_evt| { println!("yay second event"); false });
+        let fut2 = consumer.expect_event(|_evt| {
+            println!("yay second event");
+            false
+        });
 
+        eb.reset("test event", tracelogging::Level::LogAlways, 2, 0);
         eb.write(&provider, None, None);
 
         let fut3 = fut.and_then(|_| fut2);
@@ -748,7 +850,10 @@ mod tests {
     async fn stream_events() -> Result<(), windows::core::Error> {
         const sz_test_name: PCSTR = windows::s!("EtwConsumer-Rust-Tests-StreamEvent");
 
-        let provider = Box::pin(tracelogging_dynamic::Provider::new("stream_event_test", &tracelogging_dynamic::Provider::options()));
+        let provider = Box::pin(tracelogging_dynamic::Provider::new(
+            "stream_event_test",
+            &tracelogging_dynamic::Provider::options(),
+        ));
         unsafe {
             provider.as_ref().register();
         }
@@ -776,7 +881,7 @@ mod tests {
 
         let mut process_trace_thread = None;
         let mut count = 0;
-        while let Some(evt) = events.next().await {
+        while let Some(_evt) = events.next().await {
             count += 1;
             println!("Yay! {count}");
 
@@ -788,5 +893,70 @@ mod tests {
         let _ = process_trace_thread.expect("x").join(); // We don't care about what ProcessTrace returned
 
         Ok(())
+    }
+
+    static consume_event2_enabled_event: rsevents::ManualResetEvent =
+        rsevents::ManualResetEvent::new(rsevents::EventState::Unset);
+
+    #[test]
+    fn consume_event2() -> Result<(), windows::core::Error> {
+        const sz_test_name: PCSTR = windows::s!("EtwConsumer-Rust-Tests-ConsumeEvent2");
+
+        let mut options = tracelogging_dynamic::Provider::options();
+        let options = options.callback(provider_enabled_callback, &consume_event2_enabled_event as *const rsevents::ManualResetEvent as usize);
+
+        let provider = Box::pin(tracelogging_dynamic::Provider::new(
+            "consume_event_test2",
+            &options,
+        ));
+        unsafe {
+            provider.as_ref().register();
+        }
+        let provider_guid = windows::core::GUID::from_u128(provider.id().to_u128());
+        let mut eb = tracelogging_dynamic::EventBuilder::new();
+
+        let h = ControlTraceHandle::start_session(sz_test_name)?;
+        //let h = ControlTraceHandle::from_session(sz_test_name)?.manual_stop();
+        h.enable_provider(&provider_guid)?;
+
+        let mut consumer = EtwEventConsumer2::new();
+        let event_consumer = consumer.get_consumer();
+
+        let trace = ProcessTraceHandle::from_session(sz_test_name, &event_consumer)?;
+
+        consume_event2_enabled_event.wait();
+
+        eb.reset("test event", tracelogging::Level::LogAlways, 1, 0);
+        eb.write(&provider, None, None);
+
+        let fut = consumer.expect_event(|evt: &EVENT_RECORD| {
+            if evt.EventHeader.ProviderId == provider_guid {
+                println!(
+                    "Found event from provider! {}",
+                    evt.EventHeader.EventDescriptor.Keyword
+                );
+                true
+            } else {
+                false
+            }
+        });
+
+        let mut thread = trace.process_trace()?;
+
+        let fut2 = consumer.expect_event(|_evt| {
+            println!("yay second event");
+            false
+        });
+
+        eb.reset("test event", tracelogging::Level::LogAlways, 2, 0);
+        eb.write(&provider, None, None);
+
+        let fut3 = fut.and_then(|_| fut2);
+
+        let result = futures::executor::block_on(fut3);
+
+        let _ = thread.stop_and_wait(); // We don't care about what ProcessTrace returned
+
+        result
     }
 }

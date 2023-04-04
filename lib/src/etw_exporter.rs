@@ -591,7 +591,7 @@ impl EventBuilderWrapper {
         span_data: &SpanData,
         span_context: &SpanContext,
         export_payload_as_json: bool,
-        attributes: T,
+        _attributes: T,
     ) -> ExportResult
     where
         T: IntoIterator<Item = (&'a Key, &'a Value)>,

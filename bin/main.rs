@@ -14,7 +14,7 @@ fn main() {
     //     .with_json_payload()
     //     .install_simple();
 
-    let mut span_context: SpanContext = SpanContext::empty_context();
+    let span_context: SpanContext = SpanContext::empty_context();
 
     // tracer.in_span("OuterSpanName", |cx| {
     //     std::thread::sleep(std::time::Duration::from_millis(1000));
