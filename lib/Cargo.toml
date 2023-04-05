@@ -4,10 +4,10 @@ description = "OpenTelemetry-Rust Trace Span Exporter to ETW"
 version = "0.1.0"
 edition = "2021"
 resolver = "2"
-license = "Apache-2.0"
+license = "MIT"
 repository = "https://github.com/Robo210/opentelemetry-etw-tracelogging"
 rust-version = "1.67"
-authors = ["Kyle Sabo"]
+authors = ["Kyle Sabo", "Microsoft"]
 
 [features]
 json = ["dep:serde", "dep:serde_json"]

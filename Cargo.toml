@@ -1,7 +1,6 @@
-resolver = "2"
-
 [workspace]
 members = ["bin", "lib"]
+resolver = "2"
 
 [workspace.dependencies]
 opentelemetry = "0.18"
