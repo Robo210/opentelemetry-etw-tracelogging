@@ -4,13 +4,17 @@ mod etw_helpers;
 #[allow(dead_code, non_upper_case_globals)]
 mod functional {
     use crate::etw_helpers::*;
+    use futures::future::Either;
     use futures::*;
-    use opentelemetry::{Key, global::shutdown_tracer_provider, trace::{Span, SpanContext, Tracer, TraceContextExt, Link}};
+    use opentelemetry::{
+        global::shutdown_tracer_provider,
+        trace::{Link, Span, SpanContext, TraceContextExt, Tracer},
+        Key,
+    };
     use tracelogging;
     use windows::{
         core::{GUID, PCSTR},
         s,
-        Win32::System::Diagnostics::Etw::*,
     };
 
     const SAMPLE_KEY_STR: Key = Key::from_static_str("str");
@@ -33,15 +37,13 @@ mod functional {
 
     #[test]
     #[cfg(target_os = "windows")]
-    fn log_event() -> Result<(), windows::core::Error> {
-        use futures::future::Either;
-
+    fn log_common_schema_events() -> Result<(), windows::core::Error> {
         let span_context: SpanContext = SpanContext::empty_context();
 
         let tracer = opentelemetry_etw::span_exporter::new_etw_exporter(test_provider_name)
             .with_common_schema_events()
             .without_normal_events()
-            .install_realtime();
+            .install_realtime(); // Realtime because we can't wait around all day for the batch exporter to go
 
         let h = ControlTraceHandle::start_session(sz_test_session_name)?;
         h.enable_provider(&test_provider_id)?;
@@ -85,12 +87,15 @@ mod functional {
 
         shutdown_tracer_provider(); // sending remaining spans
 
+        // Check the ETW events that were collected
+
         let fut = consumer.expect_event(|evt| {
             if evt.EventHeader.ProviderId == test_provider_id {
                 println!(
                     "Found event from provider! {}",
                     evt.EventHeader.EventDescriptor.Keyword
                 );
+                // TODO: Actually verify the event contents
                 true
             } else {
                 false
@@ -102,11 +107,16 @@ mod functional {
                     "Found event from provider! {}",
                     evt.EventHeader.EventDescriptor.Keyword
                 );
+                // TODO: Actually verify the event contents
                 true
             } else {
                 false
             }
         });
+
+        // Create a future that will either time out (success) or pick up another event (failure).
+        // We only expect 2 ETW events at this point, so a 3rd event showing up is a problem.
+        // This will need to be adjusted when Span Events are turned into ETW Events.
         let fut3 = consumer.expect_event(|_evt| {
             assert!(false, "Found unexpected third event");
             false
@@ -116,11 +126,17 @@ mod functional {
             Result::<(), windows::core::Error>::Ok(())
         };
         let fut5 = futures::future::select(Box::pin(fut3), Box::pin(fut4));
+
+        // Assemble the final futures:
+        // - fut and fut2 need to run and return Ok
+        // - fut4 needs to complete with its timeout checking for extra events
         let fut6 = fut.and_then(|_| fut2);
-        let fut7 = fut6.and_then(|_| async { match fut5.await {
-            Either::Left(_) => Err(windows::core::HRESULT(-2147024662).into()), // HRESULT_FROM_WIN32(ERROR_MORE_DATA)
-            Either::Right(_) => Ok(()),
-        }});
+        let fut7 = fut6.and_then(|_| async {
+            match fut5.await {
+                Either::Left(_) => Err(windows::core::HRESULT(-2147024662).into()), // HRESULT_FROM_WIN32(ERROR_MORE_DATA)
+                Either::Right(_) => Ok(()),
+            }
+        });
 
         let mut thread = trace.process_trace()?;
 

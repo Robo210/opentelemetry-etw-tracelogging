@@ -44,7 +44,7 @@
 //! is not available at the start of a span. Attributes that are available at the span
 //! start will be added to the ETW event, but they may not match the ordering of the
 //! full set of attributes on the span end ETW event.
-//! 
+//!
 //! Common Schema events are relatively expensive to generate compared to the "normal"
 //! real-time events. It is recommended that the batch exporter be used if only Common Schema
 //! events are required, as doing so will move the event generation out of the hot-path.

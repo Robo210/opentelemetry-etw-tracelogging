@@ -488,7 +488,8 @@ impl<'a> EventConsumer for EtwEventConsumer<'a> {
                         .unwrap();
                     if result.1.timed_out() {
                         println!("waiting for consume to release current event timed out");
-                        return Err(windows::core::HRESULT(-2147023436i32).into()); // HRESULT_FROM_WIN32(ERROR_TIMEOUT)
+                        return Err(windows::core::HRESULT(-2147023436i32).into());
+                    // HRESULT_FROM_WIN32(ERROR_TIMEOUT)
                     } else {
                         guard = result.0;
                         break;
@@ -792,7 +793,10 @@ mod tests {
         const sz_test_name: PCSTR = windows::s!("EtwConsumer-Rust-Tests-ConsumeEvent");
 
         let mut options = tracelogging_dynamic::Provider::options();
-        let options = options.callback(provider_enabled_callback, &consume_event_enabled_event as *const rsevents::ManualResetEvent as usize);
+        let options = options.callback(
+            provider_enabled_callback,
+            &consume_event_enabled_event as *const rsevents::ManualResetEvent as usize,
+        );
 
         let provider = Box::pin(tracelogging_dynamic::Provider::new(
             "consume_event_test",
@@ -820,7 +824,10 @@ mod tests {
 
         let fut = consumer.expect_event(|evt: &EVENT_RECORD| {
             if evt.EventHeader.ProviderId == provider_guid {
-                println!("Found event from provider! {}", evt.EventHeader.EventDescriptor.Keyword);
+                println!(
+                    "Found event from provider! {}",
+                    evt.EventHeader.EventDescriptor.Keyword
+                );
                 true
             } else {
                 false
@@ -903,7 +910,10 @@ mod tests {
         const sz_test_name: PCSTR = windows::s!("EtwConsumer-Rust-Tests-ConsumeEvent2");
 
         let mut options = tracelogging_dynamic::Provider::options();
-        let options = options.callback(provider_enabled_callback, &consume_event2_enabled_event as *const rsevents::ManualResetEvent as usize);
+        let options = options.callback(
+            provider_enabled_callback,
+            &consume_event2_enabled_event as *const rsevents::ManualResetEvent as usize,
+        );
 
         let provider = Box::pin(tracelogging_dynamic::Provider::new(
             "consume_event_test2",
