@@ -11,7 +11,7 @@ authors = ["Kyle Sabo"]
 opentelemetry = {workspace = true}
 opentelemetry_api = {workspace = true}
 opentelemetry_sdk = {version="0.18", features=["rt-tokio"]}
-opentelemetry-etw = {workspace = true, features=["json", "async"]}
+opentelemetry-etw = {workspace = true, features=["json", "tokio"]}
 tokio = "1.0"
 
 [[bin]]

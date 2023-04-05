@@ -11,7 +11,7 @@ authors = ["Kyle Sabo", "Microsoft"]
 
 [features]
 json = ["dep:serde", "dep:serde_json"]
-async = ["dep:tokio", "opentelemetry_sdk/rt-tokio"]
+tokio = ["dep:tokio", "opentelemetry_sdk/rt-tokio"]
 default = []
 
 [lib]

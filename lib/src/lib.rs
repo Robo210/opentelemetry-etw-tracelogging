@@ -20,10 +20,10 @@
 //! Users unfamiliar with the basics of ETW may find the following links helpful.
 //! The rest of the documentation for this exporter will assume familiarity
 //! with ETW and trace processing tools such as WPA, PerfView, or TraceView.
-//! - <https://learn.microsoft.com/en-us/windows/win32/etw/about-event-tracing>
-//! - <https://learn.microsoft.com/en-us/windows-hardware/test/weg/instrumenting-your-code-with-etw>
+//! - <https://learn.microsoft.com/windows/win32/etw/about-event-tracing>
+//! - <https://learn.microsoft.com/windows-hardware/test/weg/instrumenting-your-code-with-etw>
 //!
-//! This Span exporter uses [TraceLogging](https://learn.microsoft.com/en-us/windows/win32/tracelogging/trace-logging-about)
+//! This Span exporter uses [TraceLogging](https://learn.microsoft.com/windows/win32/tracelogging/trace-logging-about)
 //! to log events. The ETW provider ID is generated from a hash of the specified provider name.
 //!
 //! By default, span start and stop events are logged with keyword 1 and
@@ -41,8 +41,13 @@
 //!
 //! Span start events may appear to be incomplete compared to those from the batch
 //! exporter. Data such as the span's status (which corresponds to the ETW event's level)
-//! is not available at the start of a span. Attributes and other data are only guaranteed
-//! to be present on span end events.
+//! is not available at the start of a span. Attributes that are available at the span
+//! start will be added to the ETW event, but they may not match the ordering of the
+//! full set of attributes on the span end ETW event.
+//! 
+//! Common Schema events are relatively expensive to generate compared to the "normal"
+//! real-time events. It is recommended that the batch exporter be used if only Common Schema
+//! events are required, as doing so will move the event generation out of the hot-path.
 //!
 //! ### Example
 //!
@@ -62,13 +67,14 @@
 //!
 //! ## Batch Exporter
 //!
-//! The Batch Exporter is for advanced scenarios, in particular for emitting only
-//! Common Schema 4.0 events, or for closer compatibility with the behavior of the
-//! OpenTelemetry-C++ ETW exporter. Spans are exported asynchronously and in batches.
-//! Because of this, the timestamps on the ETW events do not represent the time the span
-//! was originally started or ended.
+//! The Batch Exporter is for advanced scenarios, in particular when only
+//! Common Schema 4.0 events are required, or for closer compatibility with the
+//! behavior of the OpenTelemetry-C++ ETW exporter. Spans are exported asynchronously
+//! and in batches. Because of this, the timestamps on the ETW events do not
+//! represent the time the span was originally started or ended.
 //!
-//! The Batch Exporter joins the ETW provider to the [provider group](https://learn.microsoft.com/en-us/windows/win32/etw/provider-traits)
+//! When not exporting Common Schema 4.0 events, the Batch Exporter joins the ETW provider
+//! to the [provider group](https://learn.microsoft.com/windows/win32/etw/provider-traits)
 //! `{e60ec51a-8e54-5a4f-2fb260a4f9213b3a}`.
 //! Events in this group should be interpreted according to the event and field tags
 //! on each event.

@@ -97,9 +97,9 @@ impl EtwExporterBuilder {
     /// Spans will be exported some time after the span has ended.
     /// The timestamps of the ETW events, and the duration of time between
     /// events, will not be accurate.
-    /// Requires the "async" feature to be enabled on the crate.
-    #[cfg(any(feature = "async"))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+    /// Requires the "tokio" feature to be enabled on the crate.
+    #[cfg(any(feature = "tokio"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
     pub fn install_batch<R: opentelemetry_sdk::trace::TraceRuntime + Clone>(
         mut self,
         runtime: R,
@@ -199,7 +199,7 @@ mod tests {
         );
     }
 
-    #[cfg(any(feature = "async"))]
+    #[cfg(any(feature = "tokio"))]
     #[tokio::test]
     async fn install_batch() {
         new_etw_exporter("my_provider_name")
