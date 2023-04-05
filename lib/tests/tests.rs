@@ -42,8 +42,8 @@ mod functional {
 
         let tracer = opentelemetry_etw::span_exporter::new_etw_exporter(test_provider_name)
             .with_common_schema_events()
-            .without_normal_events()
-            .install_realtime(); // Realtime because we can't wait around all day for the batch exporter to go
+            .without_realtime_events()
+            .install();
 
         let h = ControlTraceHandle::start_session(sz_test_session_name)?;
         h.enable_provider(&test_provider_id)?;

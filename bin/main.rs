@@ -3,6 +3,7 @@ use opentelemetry::Key;
 use opentelemetry_api::global::shutdown_tracer_provider;
 use opentelemetry_api::trace::{Span, Tracer};
 use opentelemetry_etw as otel_etw;
+use otel_etw::span_exporter::EtwExporterAsyncRuntime;
 
 const SAMPLE_KEY_STR: Key = Key::from_static_str("str");
 const SAMPLE_KEY_BOOL: Key = Key::from_static_str("bool");
@@ -51,7 +52,8 @@ fn main() {
     rt.block_on(async {
         let tracer2 = otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name")
             .with_common_schema_events()
-            .install_batch(opentelemetry_sdk::runtime::Tokio);
+            .with_async_runtime(EtwExporterAsyncRuntime::Tokio)
+            .install();
 
         tracer2.in_span("RealtimeOuterSpanName", |cx| {
             std::thread::sleep(std::time::Duration::from_millis(1000));

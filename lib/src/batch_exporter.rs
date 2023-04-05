@@ -66,9 +66,8 @@ impl SpanExporter for BatchExporter {
 mod tests {
     use super::*;
 
-    #[cfg(any(feature = "tokio"))]
-    #[tokio::test]
-    async fn create_batch_exporter() {
+    #[test]
+    fn create_batch_exporter() {
         let _ = BatchExporter::new("my_provider_name", true, true, true, true);
     }
 }

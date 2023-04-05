@@ -1,7 +1,7 @@
 [package]
 name = "opentelemetry-etw"
 description = "OpenTelemetry-Rust Trace Span Exporter to ETW"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 resolver = "2"
 license = "MIT"
@@ -11,7 +11,7 @@ authors = ["Kyle Sabo", "Microsoft"]
 
 [features]
 json = ["dep:serde", "dep:serde_json"]
-tokio = ["dep:tokio", "opentelemetry_sdk/rt-tokio"]
+rt-tokio = ["dep:tokio", "opentelemetry_sdk/rt-tokio"]
 default = []
 
 [lib]

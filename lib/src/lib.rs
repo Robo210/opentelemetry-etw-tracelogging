@@ -32,9 +32,9 @@
 //! Span Links are logged as events with keyword 4 and [`tracelogging::Level::Verbose`].
 //!
 //!
-//! ## Realtime Exporter
+//! ## Realtime Events
 //!
-//! The real-time exporter should be the one used for almost all scenarios.
+//! The real-time events should be used for almost all scenarios.
 //! ETW events for span start and stop, as well as events added to the span,
 //! will be logged in near-realtime. The timestamps on the ETW events will
 //! be roughly within a few microseconds of the timestamp recorded by OpenTelemetry.
@@ -45,62 +45,13 @@
 //! start will be added to the ETW event, but they may not match the ordering of the
 //! full set of attributes on the span end ETW event.
 //!
-//! Common Schema events are relatively expensive to generate compared to the "normal"
-//! real-time events. It is recommended that the batch exporter be used if only Common Schema
-//! events are required, as doing so will move the event generation out of the hot-path.
+//! ## Common Schema 4.0 Events
 //!
-//! ### Example
-//!
-//! ```no_run
-//! use opentelemetry_api::global::shutdown_tracer_provider;
-//! use opentelemetry_api::trace::Tracer;
-//!
-//! let tracer = opentelemetry_etw::span_exporter::new_etw_exporter("MyEtwProviderName")
-//!     .install_realtime();
-//!
-//! tracer.in_span("doing_work", |cx| {
-//!     // Traced app logic here...
-//! });
-//!
-//! shutdown_tracer_provider(); // sending remaining spans
-//! ```
-//!
-//! ## Batch Exporter
-//!
-//! The Batch Exporter is for advanced scenarios, in particular when only
-//! Common Schema 4.0 events are required, or for closer compatibility with the
-//! behavior of the OpenTelemetry-C++ ETW exporter. Spans are exported asynchronously
+//! Common Schema 4.0 events are for advanced scenarios, when the event consumer
+//! requires events in this schema. Spans are exported asynchronously
 //! and in batches. Because of this, the timestamps on the ETW events do not
 //! represent the time the span was originally started or ended.
-//!
-//! When not exporting Common Schema 4.0 events, the Batch Exporter joins the ETW provider
-//! to the [provider group](https://learn.microsoft.com/windows/win32/etw/provider-traits)
-//! `{e60ec51a-8e54-5a4f-2fb260a4f9213b3a}`.
-//! Events in this group should be interpreted according to the event and field tags
-//! on each event.
-//!
-//! When an ETW event has the [`constants::EVENT_TAG_IGNORE_EVENT_TIME`] tag, the timestamp
-//! on the EVENT_RECORD should be ignored when processing the event.
-//! To get the real time of the event, look for a field tagged with
-//! [`constants::FIELD_TAG_IS_REAL_EVENT_TIME`].
-//!
-//! Common Schema 4.0 events do not use tags, as the payload schema supersedes the need to do so.
-//!
-//! ### Example
-//! ```no_run
-//! use opentelemetry_api::global::shutdown_tracer_provider;
-//! use opentelemetry_api::trace::Tracer;
-//!
-//! let tracer = opentelemetry_etw::span_exporter::new_etw_exporter("MyEtwProviderName")
-//!     .install_batch(opentelemetry_sdk::runtime::Tokio);
-//!
-//! tracer.in_span("doing_work", |cx| {
-//!     // Traced app logic here...
-//! });
-//!
-//! shutdown_tracer_provider(); // sending remaining spans
-//! ```
-//!
+//! 
 //! ## Span Links
 //!
 //! For non-Common Schema 4.0 events, each span link is exported as a separate ETW event.
@@ -108,6 +59,22 @@
 //! will match the span's activity ID. A `Link` field in the payload contains the linked
 //! span's ID, and any attributes for the link will be logged as additional payload fields.
 //! Links are not (currently) supported by the JSON exporter option (described below).
+//! 
+//! ## Example
+//!
+//! ```no_run
+//! use opentelemetry_api::global::shutdown_tracer_provider;
+//! use opentelemetry_api::trace::Tracer;
+//!
+//! let tracer = opentelemetry_etw::span_exporter::new_etw_exporter("MyEtwProviderName")
+//!     .install();
+//!
+//! tracer.in_span("doing_work", |cx| {
+//!     // Traced app logic here...
+//! });
+//!
+//! shutdown_tracer_provider(); // sending remaining spans
+//! ```
 //!
 //! ## Differences with OpenTelemetry-C++ ETW Exporter
 //!
@@ -143,10 +110,6 @@
 //! - The C++ exporter supports logs from the the OpenTelemetry Logging API proposal.
 //! This is not (yet) supported by OpenTelemetry-Rust.
 //! - The C++ exporter does not (currently) use opcodes or levels on its ETW events.
-//! - Consumers of events from the C++ exporter are expected to understand the payload field names and extract
-//! meaning from them instead of the `EVENT_RECORD`. Most ETW consumers cannot do this.
-//!   - The C++ exporter does not tag its ETW events or fields containing the "real" timestamp for a span or event.
-//!   - The Rust exporter uses the same field names as the C++ exporter whenever possible.
 //! - The C++ exporter and Rust exporter use different algorithms to generate activity IDs from span IDs.
 //! This should not be noticeable as span IDs and activity IDs should always be unique.
 //!   - The C++ exporter (currently) copies the 8-byte span ID into the 16-byte activity ID GUID, leaving the
