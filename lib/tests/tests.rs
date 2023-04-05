@@ -34,6 +34,8 @@ mod functional {
     #[test]
     #[cfg(target_os = "windows")]
     fn log_event() -> Result<(), windows::core::Error> {
+        use futures::future::Either;
+
         let span_context: SpanContext = SpanContext::empty_context();
 
         let tracer = opentelemetry_etw::span_exporter::new_etw_exporter(test_provider_name)
@@ -83,7 +85,7 @@ mod functional {
 
         shutdown_tracer_provider(); // sending remaining spans
 
-        let fut = consumer.expect_event(|evt: &EVENT_RECORD| {
+        let fut = consumer.expect_event(|evt| {
             if evt.EventHeader.ProviderId == test_provider_id {
                 println!(
                     "Found event from provider! {}",
@@ -94,7 +96,7 @@ mod functional {
                 false
             }
         });
-        let fut2 = consumer.expect_event(|evt: &EVENT_RECORD| {
+        let fut2 = consumer.expect_event(|evt| {
             if evt.EventHeader.ProviderId == test_provider_id {
                 println!(
                     "Found event from provider! {}",
@@ -105,10 +107,24 @@ mod functional {
                 false
             }
         });
+        let fut3 = consumer.expect_event(|_evt| {
+            assert!(false, "Found unexpected third event");
+            false
+        });
+        let fut4 = async {
+            std::thread::sleep(std::time::Duration::from_millis(2000));
+            Result::<(), windows::core::Error>::Ok(())
+        };
+        let fut5 = futures::future::select(Box::pin(fut3), Box::pin(fut4));
+        let fut6 = fut.and_then(|_| fut2);
+        let fut7 = fut6.and_then(|_| async { match fut5.await {
+            Either::Left(_) => Err(windows::core::HRESULT(-2147024662).into()), // HRESULT_FROM_WIN32(ERROR_MORE_DATA)
+            Either::Right(_) => Ok(()),
+        }});
 
         let mut thread = trace.process_trace()?;
 
-        let result = futures::executor::block_on(fut.and_then(|_| fut2));
+        let result = futures::executor::block_on(fut7);
 
         let _ = thread.stop_and_wait(); // We don't care about what ProcessTrace returned
 
