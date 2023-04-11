@@ -1,4 +1,4 @@
-use crate::batch_exporter::*;
+use crate::{batch_exporter::*};
 use crate::realtime_exporter::*;
 use opentelemetry::global::GlobalTracerProvider;
 use opentelemetry_api::{global, trace::TracerProvider};
@@ -177,14 +177,6 @@ impl EtwExporterBuilder {
                     }
                 }
                 Some(x) => {
-                    let exporter = BatchExporter::new(
-                        &self.provider_name,
-                        self.use_byte_for_bools,
-                        self.json,
-                        self.emit_common_schema_events,
-                        self.emit_realtime_events,
-                    );
-
                     let provider_builder = opentelemetry_sdk::trace::TracerProvider::builder()
                         .with_batch_exporter(
                             exporter,

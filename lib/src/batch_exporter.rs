@@ -1,17 +1,21 @@
 use crate::constants::*;
+use crate::exporter_traits::*;
+#[allow(unused_imports)]
 use crate::etw_exporter::*;
+#[allow(unused_imports)]
+use crate::user_events_exporter::*;
 use futures_util::future::BoxFuture;
 use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
 use std::fmt::Debug;
 use std::sync::Arc;
-use tracelogging_dynamic::*;
 
-pub struct BatchExporter {
-    config: EtwExporterConfig,
-    ebw: EventBuilderWrapper,
+pub struct BatchExporter<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> {
+    config: C,
+    ebw: E,
 }
 
-impl BatchExporter {
+#[cfg(all(target_os = "windows"))]
+impl BatchExporter<EtwExporterConfig, EtwEventExporter> {
     pub(crate) fn new(
         provider_name: &str,
         use_byte_for_bools: bool,
@@ -19,9 +23,9 @@ impl BatchExporter {
         common_schema: bool,
         etw_activities: bool,
     ) -> Self {
-        let provider = Arc::pin(Provider::new(
+        let provider = Arc::pin(tracelogging_dynamic::Provider::new(
             provider_name,
-            Provider::options().group_id(&GROUP_ID),
+            tracelogging_dynamic::Provider::options().group_id(&GROUP_ID),
         ));
         unsafe {
             provider.as_ref().register();
@@ -32,27 +36,59 @@ impl BatchExporter {
                 span_keywords: 1,
                 event_keywords: 2,
                 links_keywords: 4,
-                bool_intype: if use_byte_for_bools {
-                    InType::U8
-                } else {
-                    InType::Bool32
-                },
                 json: export_payload_as_json,
                 common_schema,
                 etw_activities,
             },
-            ebw: EventBuilderWrapper::new(),
+            ebw: EtwEventExporter::new(if use_byte_for_bools {
+                tracelogging::InType::U8
+            } else {
+                tracelogging::InType::Bool32
+            }),
         }
     }
 }
 
-impl Debug for BatchExporter {
+#[cfg(all(target_os = "linux"))]
+impl BatchExporter<UserEventsExporterConfig, UserEventsExporter> {
+    pub(crate) fn new(
+        provider_name: &str,
+        _use_byte_for_bools: bool,
+        export_payload_as_json: bool,
+        common_schema: bool,
+        etw_activities: bool,
+    ) -> Self {
+        let mut provider = linux_tld::Provider::new(provider_name, linux_tld::Provider::options().group_name(GROUP_NAME));
+        unsafe {
+            provider.register_set(linux_tlg::Level::Informational, 1);
+            provider.register_set(linux_tlg::Level::Verbose, 2);
+            provider.register_set(linux_tlg::Level::Verbose, 4);
+        }
+
+        let exporter = BatchExporter {
+            config: UserEventsExporterConfig {
+                provider: Arc::new(provider),
+                span_keywords: 1,
+                event_keywords: 2,
+                links_keywords: 4,
+                json: export_payload_as_json,
+                common_schema,
+                etw_activities,
+            },
+            ebw: UserEventsExporter::new(),
+        };
+
+        exporter
+    }
+}
+
+impl<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> Debug for BatchExporter<C, E> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
 
-impl SpanExporter for BatchExporter {
+impl<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> SpanExporter for BatchExporter<C, E> {
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
         for span in batch {
             let _ = self.ebw.log_span_data(&self.config, &span);

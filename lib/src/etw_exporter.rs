@@ -1,14 +1,14 @@
 use crate::constants::*;
 use crate::error::*;
+use crate::exporter_traits::*;
+use crate::json;
 use chrono::{Datelike, Timelike};
 use opentelemetry::Array;
 use opentelemetry::{
-    trace::{Event, Link, SpanContext, SpanId, SpanKind, Status, TraceError, TraceId},
+    trace::{Event, Link, SpanContext, SpanId, SpanKind, Status, TraceError},
     Key, Value,
 };
 use opentelemetry_sdk::export::trace::{ExportResult, SpanData};
-use std::borrow::Cow;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::{pin::Pin, time::SystemTime};
 use tracelogging_dynamic::*;
@@ -19,48 +19,39 @@ pub(crate) struct EtwExporterConfig {
     pub(crate) span_keywords: u64,
     pub(crate) event_keywords: u64,
     pub(crate) links_keywords: u64,
-    pub(crate) bool_intype: InType,
     pub(crate) json: bool,
     pub(crate) common_schema: bool,
     pub(crate) etw_activities: bool,
 }
 
-impl EtwExporterConfig {
-    pub(crate) fn get_provider(&self) -> Pin<&Provider> {
-        self.provider.as_ref()
+impl ExporterConfig for EtwExporterConfig {
+    fn get_provider(&self) -> ProviderWrapper {
+        ProviderWrapper::Etw(self.provider.clone())
     }
 
-    pub(crate) fn get_span_keywords(&self) -> u64 {
+    fn get_span_keywords(&self) -> u64 {
         self.span_keywords
     }
 
-    pub(crate) fn get_event_keywords(&self) -> u64 {
+    fn get_event_keywords(&self) -> u64 {
         self.event_keywords
     }
 
-    pub(crate) fn get_links_keywords(&self) -> u64 {
+    fn get_links_keywords(&self) -> u64 {
         self.links_keywords
     }
 
-    pub(crate) fn get_bool_representation(&self) -> InType {
-        self.bool_intype
-    }
-
-    pub(crate) fn get_export_as_json(&self) -> bool {
+    fn get_export_as_json(&self) -> bool {
         self.json
     }
 
-    pub(crate) fn get_export_common_schema_event(&self) -> bool {
+    fn get_export_common_schema_event(&self) -> bool {
         self.common_schema
     }
 
-    pub(crate) fn get_export_span_events(&self) -> bool {
+    fn get_export_span_events(&self) -> bool {
         self.etw_activities
     }
-}
-
-pub trait EtwSpan {
-    fn get_span_data(&self) -> &SpanData;
 }
 
 struct Win32SystemTime {
@@ -86,48 +77,17 @@ impl From<std::time::SystemTime> for Win32SystemTime {
     }
 }
 
-pub struct EventBuilderWrapper {
+struct EtwEventBuilderWrapper {
     eb: EventBuilder,
 }
 
-impl EventBuilderWrapper {
-    pub fn new() -> EventBuilderWrapper {
-        EventBuilderWrapper {
+impl EtwEventBuilderWrapper {
+    pub fn new() -> EtwEventBuilderWrapper {
+        EtwEventBuilderWrapper {
             eb: EventBuilder::new(),
         }
     }
-}
 
-struct Activities {
-    span_id: String,
-    activity_id: Guid,
-    parent_activity_id: Option<Guid>,
-    parent_span_id: String,
-    trace_id_name: String,
-}
-
-impl Activities {
-    fn generate(span_id: &SpanId, parent_span_id: &SpanId, trace_id: &TraceId) -> Activities {
-        let name = span_id.to_string();
-        let activity_id = Guid::from_name(&name);
-        let (parent_activity_id, parent_span_name) = if *parent_span_id == SpanId::INVALID {
-            (None, String::default())
-        } else {
-            let parent_span_name = parent_span_id.to_string();
-            (Some(Guid::from_name(&parent_span_name)), parent_span_name)
-        };
-
-        Activities {
-            span_id: name,
-            activity_id,
-            parent_activity_id,
-            parent_span_id: parent_span_name,
-            trace_id_name: trace_id.to_string(),
-        }
-    }
-}
-
-impl EventBuilderWrapper {
     fn add_win32_systemtime(
         &mut self,
         field_name: &str,
@@ -215,88 +175,6 @@ impl EventBuilderWrapper {
         }
     }
 
-    #[cfg(feature = "json")]
-    fn add_attributes_to_event_as_json(
-        &mut self,
-        attribs: &mut dyn Iterator<Item = (&Key, &Value)>,
-    ) {
-        let mut payload: std::collections::BTreeMap<String, serde_json::Value> = Default::default();
-
-        for attrib in attribs {
-            let field_name = &attrib.0.to_string();
-            match attrib.1 {
-                Value::Bool(b) => {
-                    payload.insert(field_name.clone(), serde_json::Value::Bool(*b));
-                }
-                Value::I64(i) => {
-                    payload.insert(
-                        field_name.clone(),
-                        serde_json::Value::Number(serde_json::Number::from(*i)),
-                    );
-                }
-                Value::F64(f) => {
-                    payload.insert(
-                        field_name.clone(),
-                        serde_json::Value::Number(serde_json::Number::from_f64(*f).unwrap()),
-                    );
-                }
-                Value::String(s) => {
-                    payload.insert(field_name.clone(), serde_json::Value::String(s.to_string()));
-                }
-                Value::Array(array) => match array {
-                    Array::Bool(v) => {
-                        payload.insert(
-                            field_name.clone(),
-                            serde_json::Value::Array(
-                                v.iter().map(|b| serde_json::Value::Bool(*b)).collect(),
-                            ),
-                        );
-                    }
-                    Array::I64(v) => {
-                        payload.insert(
-                            field_name.clone(),
-                            serde_json::Value::Array(
-                                v.iter()
-                                    .map(|i| {
-                                        serde_json::Value::Number(serde_json::Number::from(*i))
-                                    })
-                                    .collect(),
-                            ),
-                        );
-                    }
-                    Array::F64(v) => {
-                        payload.insert(
-                            field_name.clone(),
-                            serde_json::Value::Array(
-                                v.iter()
-                                    .map(|f| {
-                                        serde_json::Value::Number(
-                                            serde_json::Number::from_f64(*f).unwrap(),
-                                        )
-                                    })
-                                    .collect(),
-                            ),
-                        );
-                    }
-                    Array::String(v) => {
-                        payload.insert(
-                            field_name.clone(),
-                            serde_json::Value::Array(
-                                v.iter()
-                                    .map(|s| serde_json::Value::String(s.to_string()))
-                                    .collect(),
-                            ),
-                        );
-                    }
-                },
-            }
-        }
-
-        if let Ok(json_string) = serde_json::to_string(&payload) {
-            self.add_str8("Payload", &json_string, OutType::Json, 0);
-        }
-    }
-
     fn write_span_links(
         &mut self,
         tlg_provider: &Pin<&Provider>,
@@ -340,12 +218,12 @@ impl EventBuilderWrapper {
 
                 let win32err = self.write(
                     tlg_provider,
-                    Some(&activities.activity_id),
-                    activities.parent_activity_id.as_ref(),
+                    Some(Guid::from_bytes_le(&activities.activity_id)).as_ref(),
+                    activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_le(g))).as_ref(),
                 );
 
                 if win32err != 0 {
-                    return Err(TraceError::ExportFailed(Box::new(Error { win32err })));
+                    return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
                 }
             }
         }
@@ -393,9 +271,8 @@ impl EventBuilderWrapper {
 
                 #[cfg(feature = "json")]
                 if export_payload_as_json {
-                    self.add_attributes_to_event_as_json(
-                        &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
-                    );
+                    let json_string = json::get_attributes_as_json(&mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)));
+                    self.add_str8("Payload", &json_string, OutType::Json, 0);
                     added = true;
                 }
 
@@ -408,12 +285,12 @@ impl EventBuilderWrapper {
 
                 let win32err = self.write(
                     tlg_provider,
-                    Some(&activities.activity_id),
-                    activities.parent_activity_id.as_ref(),
+                    Some(Guid::from_bytes_le(&activities.activity_id)).as_ref(),
+                    activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_le(g))).as_ref(),
                 );
 
                 if win32err != 0 {
-                    return Err(TraceError::ExportFailed(Box::new(Error { win32err })));
+                    return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
                 }
             }
         }
@@ -424,7 +301,7 @@ impl EventBuilderWrapper {
     #[allow(clippy::too_many_arguments)]
     fn write_span_event(
         &mut self,
-        tlg_provider: &Pin<&Provider>,
+        tlg_provider: &Pin<&tracelogging_dynamic::Provider>,
         name: &str,
         level: Level,
         keywords: u64,
@@ -490,7 +367,8 @@ impl EventBuilderWrapper {
 
         #[cfg(feature = "json")]
         if export_payload_as_json {
-            self.add_attributes_to_event_as_json(attributes);
+            let json_string = json::get_attributes_as_json(attributes);
+            self.add_str8("Payload", &json_string, OutType::Json, 0);
             added = true;
         }
 
@@ -500,89 +378,18 @@ impl EventBuilderWrapper {
 
         let win32err = self.write(
             tlg_provider,
-            Some(&activities.activity_id),
-            activities.parent_activity_id.as_ref(),
+            Some(Guid::from_bytes_le(&activities.activity_id)).as_ref(),
+            activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_le(g))).as_ref(),
         );
 
         if win32err != 0 {
-            return Err(TraceError::ExportFailed(Box::new(Error { win32err })));
+            return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
         }
 
         Ok(())
     }
 
-    #[allow(dead_code)]
-    fn extract_common_schema_parta_exts<'a, T>(
-        attributes: T,
-    ) -> HashMap<&'static str, Vec<(&'static str, Cow<'a, str>)>>
-    where
-        T: IntoIterator<Item = (&'a Key, &'a Value)>,
-    {
-        // Pull out PartA fields from the resource
-
-        let mut has_cloud = false;
-        let mut service_name: Cow<str> = Cow::default();
-        let mut service_namespace: Cow<str> = Cow::default();
-        let mut service_instance_id: Cow<str> = Cow::default();
-        let mut enduser_id: Cow<str> = Cow::default();
-
-        for cfg in attributes {
-            let key_str = cfg.0.as_str();
-            match key_str {
-                "service.namespace" => {
-                    service_namespace = cfg.1.as_str();
-                    has_cloud = true;
-                }
-                "service.name" => {
-                    service_name = cfg.1.as_str();
-                    has_cloud = true;
-                }
-                "service.instance.id" => {
-                    service_instance_id = cfg.1.as_str();
-                    has_cloud = true;
-                }
-                "enduser.id" => enduser_id = cfg.1.as_str(),
-                // TODO: Part A ext "sdk.ver"
-                _ => (),
-            }
-        }
-
-        #[allow(non_snake_case)]
-        let mut partA_exts = HashMap::with_capacity(2);
-        if has_cloud {
-            let mut values = Vec::<(&'static str, Cow<str>)>::with_capacity(2);
-            if !service_name.is_empty() && !service_namespace.is_empty() {
-                values.push((
-                    "role",
-                    Cow::Owned(std::fmt::format(format_args!(
-                        "[{service_namespace}]/{service_name}"
-                    ))),
-                ));
-            } else if !service_name.is_empty() {
-                values.push(("role", service_name));
-            } else if !service_namespace.is_empty() {
-                values.push(("role", service_namespace));
-            }
-
-            if !service_instance_id.is_empty() {
-                values.push(("roleInstance", service_instance_id));
-            } else {
-                // TODO: Get machine hostname
-            }
-
-            partA_exts.insert("ext_cloud", values);
-        }
-
-        if !enduser_id.is_empty() {
-            let values: Vec<(&str, Cow<str>)> = vec![("userId", enduser_id)];
-
-            partA_exts.insert("ext_app", values);
-        }
-
-        partA_exts
-    }
-
-    fn write_common_schema_span<'a, T>(
+    fn write_common_schema_span<'a, C>(
         &mut self,
         tlg_provider: &Pin<&Provider>,
         name: &str,
@@ -591,10 +398,10 @@ impl EventBuilderWrapper {
         span_data: &SpanData,
         span_context: &SpanContext,
         export_payload_as_json: bool,
-        _attributes: T,
+        _attributes: C,
     ) -> ExportResult
     where
-        T: IntoIterator<Item = (&'a Key, &'a Value)>,
+        C: IntoIterator<Item = (&'a Key, &'a Value)>,
     {
         let trace_id = span_context.trace_id().to_string();
         let span_id = span_context.span_id().to_string();
@@ -605,7 +412,7 @@ impl EventBuilderWrapper {
 
         // Promoting values from PartC to PartA extensions is apparently just a draft spec
         // and not necessary / supported by consumers.
-        // let exts = Self::extract_common_schema_parta_exts(attributes);
+        // let exts = json::extract_common_schema_parta_exts(attributes);
 
         self.add_u16("__csver__", 0x0401, OutType::Signed, 0);
         self.add_struct("PartA", 2 /* + exts.len() as u8*/, 0);
@@ -729,7 +536,8 @@ impl EventBuilderWrapper {
 
             #[cfg(feature = "json")]
             if export_payload_as_json {
-                self.add_attributes_to_event_as_json(&mut span_data.attributes.iter());
+                let json_string = json::get_attributes_as_json(&mut span_data.attributes.iter());
+                self.add_str8("Payload", &json_string, OutType::Json, 0);
                 added = true;
             }
 
@@ -741,27 +549,58 @@ impl EventBuilderWrapper {
         let win32err = self.write(tlg_provider, None, None);
 
         if win32err != 0 {
-            return Err(TraceError::ExportFailed(Box::new(Error { win32err })));
+            return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
         }
 
         Ok(())
     }
+}
 
+impl std::ops::Deref for EtwEventBuilderWrapper {
+    type Target = EventBuilder;
+    fn deref(&self) -> &Self::Target {
+        &self.eb
+    }
+}
+
+impl std::ops::DerefMut for EtwEventBuilderWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.eb
+    }
+}
+
+pub(crate) struct EtwEventExporter {
+    bool_representation: InType,
+}
+
+impl EtwEventExporter {
+    #[allow(dead_code)]
+    pub(crate) fn new(bool_representation: InType) -> EtwEventExporter {
+        // Unfortunately we can't safely share a cached EventBuilder without adding undesirable locking
+        EtwEventExporter {bool_representation}
+    }
+}
+
+impl EventExporter for EtwEventExporter {
     // Called by the real-time exporter when a span is started
-    pub(crate) fn log_span_start<T>(
-        &mut self,
-        provider: &EtwExporterConfig,
-        span: &T,
+    fn log_span_start<C, S>(
+        &self,
+        provider: &C,
+        span: &S,
     ) -> ExportResult
     where
-        T: opentelemetry_api::trace::Span + EtwSpan,
+        C: ExporterConfig,
+        S: opentelemetry_api::trace::Span + EtwSpan,
     {
         if !provider.get_export_span_events() {
             // Common schema events are logged at span end
             return Ok(());
         }
 
-        let tlg_provider = provider.get_provider();
+        let tlg_provider = match provider.get_provider() {
+            ProviderWrapper::Etw(p) => p,
+            _ => panic!()
+        };
         let span_keywords = provider.get_span_keywords();
 
         if !tlg_provider.enabled(Level::Informational, span_keywords) {
@@ -769,7 +608,7 @@ impl EventBuilderWrapper {
         }
 
         let links_keywords = provider.get_links_keywords();
-        let use_byte_for_bools = match provider.get_bool_representation() {
+        let use_byte_for_bools = match self.bool_representation {
             InType::U8 => true,
             InType::Bool32 => false,
             _ => panic!("unsupported bool representation"),
@@ -786,8 +625,10 @@ impl EventBuilderWrapper {
             &span_context.trace_id(),
         );
 
-        self.write_span_event(
-            &tlg_provider,
+        let mut ebw = EtwEventBuilderWrapper::new();
+
+        ebw.write_span_event(
+            &tlg_provider.as_ref(),
             &span_data.name,
             Level::Informational,
             span_keywords,
@@ -802,8 +643,8 @@ impl EventBuilderWrapper {
             export_payload_as_json,
         )?;
 
-        self.write_span_links(
-            &tlg_provider,
+        ebw.write_span_links(
+            &tlg_provider.as_ref(),
             Level::Verbose,
             links_keywords,
             &activities,
@@ -817,20 +658,26 @@ impl EventBuilderWrapper {
     }
 
     // Called by the real-time exporter when a span is ended
-    pub(crate) fn log_span_end<T>(&mut self, provider: &EtwExporterConfig, span: &T) -> ExportResult
+    fn log_span_end<C, S>(&self, provider: &C, span: &S) -> ExportResult
     where
-        T: opentelemetry_api::trace::Span + EtwSpan,
+        C: ExporterConfig,
+        S: opentelemetry_api::trace::Span + EtwSpan,
     {
         let span_keywords = provider.get_span_keywords();
         //let event_keywords = provider.get_event_keywords();
-        let use_byte_for_bools = match provider.get_bool_representation() {
+        let use_byte_for_bools = match self.bool_representation {
             InType::U8 => true,
             InType::Bool32 => false,
             _ => panic!("unsupported bool representation"),
         };
         let export_payload_as_json = provider.get_export_as_json();
-        let tlg_provider = provider.get_provider();
+        let tlg_provider = match provider.get_provider() {
+            ProviderWrapper::Etw(p) => p,
+            _ => panic!()
+        };
         let span_data = span.get_span_data();
+
+        let mut ebw = EtwEventBuilderWrapper::new();
 
         if tlg_provider.enabled(Level::Informational, span_keywords)
             && provider.get_export_span_events()
@@ -841,8 +688,8 @@ impl EventBuilderWrapper {
                 &span_data.span_context.trace_id(),
             );
 
-            self.write_span_event(
-                &tlg_provider,
+            ebw.write_span_event(
+                &tlg_provider.as_ref(),
                 &span_data.name,
                 Level::Informational,
                 span_keywords,
@@ -862,8 +709,8 @@ impl EventBuilderWrapper {
             && provider.get_export_common_schema_event()
         {
             let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
-            self.write_common_schema_span(
-                &tlg_provider,
+            ebw.write_common_schema_span(
+                &tlg_provider.as_ref(),
                 &span_data.name,
                 Level::Informational,
                 span_keywords,
@@ -878,17 +725,21 @@ impl EventBuilderWrapper {
     }
 
     // Called by the real-time exporter when an event is added to a span
-    pub(crate) fn log_span_event<T>(
-        &mut self,
-        provider: &EtwExporterConfig,
+    fn log_span_event<C, S>(
+        &self,
+        provider: &C,
         event: opentelemetry_api::trace::Event,
-        span: &T,
+        span: &S,
     ) -> ExportResult
     where
-        T: opentelemetry_api::trace::Span + EtwSpan,
+        C: ExporterConfig,
+        S: opentelemetry_api::trace::Span + EtwSpan,
     {
         let event_keywords = provider.get_event_keywords();
-        let tlg_provider = provider.get_provider();
+        let tlg_provider = match provider.get_provider() {
+            ProviderWrapper::Etw(p) => p,
+            _ => panic!()
+        };
 
         if !tlg_provider.enabled(Level::Informational, event_keywords)
             || !provider.get_export_span_events()
@@ -897,7 +748,7 @@ impl EventBuilderWrapper {
             return Ok(());
         }
 
-        let use_byte_for_bools = match provider.get_bool_representation() {
+        let use_byte_for_bools = match self.bool_representation {
             InType::U8 => true,
             InType::Bool32 => false,
             _ => panic!("unsupported bool representation"),
@@ -911,82 +762,92 @@ impl EventBuilderWrapper {
             &span_data.span_context.trace_id(),
         );
 
-        self.reset(
+        let mut ebw = EtwEventBuilderWrapper::new();
+
+        ebw.reset(
             &event.name,
             Level::Verbose,
             event_keywords,
             EVENT_TAG_IGNORE_EVENT_TIME,
         );
-        self.opcode(Opcode::Info);
+        ebw.opcode(Opcode::Info);
 
-        self.add_filetime(
+        ebw.add_filetime(
             "otel_event_time",
             win_filetime_from_systemtime!(event.timestamp),
             OutType::DateTimeUtc,
             FIELD_TAG_IS_REAL_EVENT_TIME,
         );
-        self.add_win32_systemtime("time", &event.timestamp.into(), 0);
+        ebw.add_win32_systemtime("time", &event.timestamp.into(), 0);
 
-        self.add_str8("SpanId", &activities.span_id, OutType::Utf8, 0);
+        ebw.add_str8("SpanId", &activities.span_id, OutType::Utf8, 0);
 
         if !activities.parent_span_id.is_empty() {
-            self.add_str8("ParentId", &activities.parent_span_id, OutType::Utf8, 0);
+            ebw.add_str8("ParentId", &activities.parent_span_id, OutType::Utf8, 0);
         }
 
-        self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
+        ebw.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
 
         let mut added = false;
 
         #[cfg(feature = "json")]
         if export_payload_as_json {
-            self.add_attributes_to_event_as_json(
-                &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
-            );
+            let json_string = json::get_attributes_as_json(&mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)));
+            ebw.add_str8("Payload", &json_string, OutType::Json, 0);
             added = true;
         }
 
         if !added {
-            self.add_attributes_to_event(
+            ebw.add_attributes_to_event(
                 &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
                 use_byte_for_bools,
             );
         }
 
-        let win32err = self.write(
+        let win32err = ebw.write(
             &tlg_provider,
-            Some(&activities.activity_id),
-            activities.parent_activity_id.as_ref(),
+            Some(Guid::from_bytes_le(&activities.activity_id)).as_ref(),
+            activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_le(g))).as_ref(),
         );
 
         if win32err != 0 {
-            return Err(TraceError::ExportFailed(Box::new(Error { win32err })));
+            return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
         }
 
         Ok(())
     }
 
     // Called by the batch exporter sometime after span is completed
-    pub(crate) fn log_span_data(
-        &mut self,
-        provider: &EtwExporterConfig,
+    fn log_span_data<C>(
+        &self,
+        provider: &C,
         span_data: &SpanData,
-    ) -> ExportResult {
+    ) -> ExportResult
+    where
+        C: ExporterConfig,
+    {
         let span_keywords = provider.get_span_keywords();
         let event_keywords = provider.get_event_keywords();
         let links_keywords = provider.get_links_keywords();
-        let use_byte_for_bools = match provider.get_bool_representation() {
+        let use_byte_for_bools = match self.bool_representation {
             InType::U8 => true,
             InType::Bool32 => false,
             _ => panic!("unsupported bool representation"),
         };
         let export_payload_as_json = provider.get_export_as_json();
-        let tlg_provider = provider.get_provider();
+        let tlg_provider = match provider.get_provider() {
+            ProviderWrapper::Etw(p) => p,
+            _ => panic!()
+        };
 
         let level = match span_data.status {
             Status::Ok => Level::Informational,
             Status::Error { .. } => Level::Error,
             Status::Unset => Level::Verbose,
         };
+
+        // TODO: We should be caching this and reusing it for the entire batch export
+        let mut ebw = EtwEventBuilderWrapper::new();
 
         let mut err = Ok(());
         if tlg_provider.enabled(level, span_keywords) && provider.get_export_span_events() {
@@ -996,9 +857,9 @@ impl EventBuilderWrapper {
                 &span_data.span_context.trace_id(),
             );
 
-            err = self
+            err = ebw
                 .write_span_event(
-                    &tlg_provider,
+                    &tlg_provider.as_ref(),
                     &span_data.name,
                     level,
                     span_keywords,
@@ -1013,8 +874,8 @@ impl EventBuilderWrapper {
                     export_payload_as_json,
                 )
                 .and_then(|_| {
-                    self.write_span_events(
-                        &tlg_provider,
+                    ebw.write_span_events(
+                        &tlg_provider.as_ref(),
                         Level::Verbose,
                         event_keywords,
                         &activities,
@@ -1024,8 +885,8 @@ impl EventBuilderWrapper {
                     )
                 })
                 .and_then(|_| {
-                    self.write_span_links(
-                        &tlg_provider,
+                    ebw.write_span_links(
+                        &tlg_provider.as_ref(),
                         Level::Verbose,
                         links_keywords,
                         &activities,
@@ -1036,8 +897,8 @@ impl EventBuilderWrapper {
                     )
                 })
                 .and_then(|_| {
-                    self.write_span_event(
-                        &tlg_provider,
+                    ebw.write_span_event(
+                        &tlg_provider.as_ref(),
                         &span_data.name,
                         level,
                         span_keywords,
@@ -1059,8 +920,8 @@ impl EventBuilderWrapper {
         {
             let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
 
-            let err2 = self.write_common_schema_span(
-                &tlg_provider,
+            let err2 = ebw.write_common_schema_span(
+                &tlg_provider.as_ref(),
                 &span_data.name,
                 Level::Informational,
                 span_keywords,
@@ -1077,19 +938,6 @@ impl EventBuilderWrapper {
     }
 }
 
-impl std::ops::Deref for EventBuilderWrapper {
-    type Target = EventBuilder;
-    fn deref(&self) -> &Self::Target {
-        &self.eb
-    }
-}
-
-impl std::ops::DerefMut for EventBuilderWrapper {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.eb
-    }
-}
-
 #[allow(dead_code)]
 #[allow(unused_imports)]
 mod tests {
@@ -1103,7 +951,7 @@ mod tests {
 
     #[test]
     fn add_attributes() {
-        let mut ebw = EventBuilderWrapper::new();
+        let mut ebw = EtwEventBuilderWrapper::new();
 
         let attribs = vec![
             TEST_KEY_STR.string("is cool"),
@@ -1117,7 +965,7 @@ mod tests {
 
     #[test]
     fn add_attribute_sequences() {
-        let mut ebw = EventBuilderWrapper::new();
+        let mut ebw = EtwEventBuilderWrapper::new();
 
         let attribs = vec![
             TEST_KEY_STR.array(vec![StringValue::from("is cool")]),

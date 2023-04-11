@@ -119,7 +119,10 @@ mod batch_exporter;
 mod builder;
 mod constants;
 mod error;
+mod json;
 mod etw_exporter;
+mod user_events_exporter;
+mod exporter_traits;
 mod realtime_exporter;
 
 pub mod span_exporter {

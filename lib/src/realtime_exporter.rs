@@ -1,5 +1,9 @@
 use crate::constants::*;
+use crate::exporter_traits::*;
+#[allow(unused_imports)]
 use crate::etw_exporter::*;
+#[allow(unused_imports)]
+use crate::user_events_exporter::*;
 use opentelemetry::InstrumentationLibrary;
 use opentelemetry::{
     trace::{
@@ -13,22 +17,23 @@ use opentelemetry_sdk::{
     trace::{EvictedHashMap, EvictedQueue},
 };
 use std::borrow::Cow;
-use std::sync::{atomic::*, Arc, Mutex, Weak};
+use std::sync::{atomic::*, Arc, Weak};
 use std::time::SystemTime;
 use tracelogging_dynamic::*;
 
-pub struct RealtimeSpan {
-    ebw: Mutex<EventBuilderWrapper>,
-    etw_config: Weak<EtwExporterConfig>,
+pub struct RealtimeSpan<C: ExporterConfig, E: EventExporter> {
+    exporter_config: Weak<C>,
+    event_exporter: Weak<E>,
     span_data: SpanData,
     ended: AtomicBool,
 }
 
-impl RealtimeSpan {
+impl<C: ExporterConfig, E: EventExporter> RealtimeSpan<C, E> {
     fn build(
         builder: SpanBuilder,
-        etw_config: Weak<EtwExporterConfig>,
+        exporter_config: Weak<C>,
         otel_config: Weak<opentelemetry_sdk::trace::Config>,
+        event_exporter: Weak<E>,
         parent_span: Option<SpanRef>,
         instrumentation_lib: InstrumentationLibrary,
     ) -> Self {
@@ -44,8 +49,8 @@ impl RealtimeSpan {
         let attributes = builder.attributes.unwrap_or_default().into_iter();
 
         let mut span = RealtimeSpan {
-            ebw: Mutex::new(EventBuilderWrapper::new()),
-            etw_config,
+            exporter_config,
+            event_exporter,
             span_data: SpanData {
                 span_context: SpanContext::new(
                     builder
@@ -99,30 +104,30 @@ impl RealtimeSpan {
         self.span_data.start_time = SystemTime::now();
         self.span_data.end_time = self.span_data.start_time; // The spec requires this, even though it doesn't make sense.
 
-        let mut strong = self.etw_config.upgrade();
+        let mut strong = self.exporter_config.upgrade();
         if let Some(prov) = strong.as_mut() {
-            if let Ok(mut ebw) = self.ebw.lock() {
-                let _ = ebw.log_span_start(prov.as_ref(), self);
+            if let Some(event_exporter) = self.event_exporter.upgrade() {
+                let _ = event_exporter.log_span_start(prov.as_ref(), self);
             }
         }
     }
 }
 
-impl opentelemetry_api::trace::Span for RealtimeSpan {
-    fn add_event_with_timestamp<T>(
+impl<C: ExporterConfig, E: EventExporter> opentelemetry_api::trace::Span for RealtimeSpan<C, E> {
+    fn add_event_with_timestamp<N>(
         &mut self,
-        name: T,
+        name: N,
         timestamp: std::time::SystemTime,
         attributes: Vec<opentelemetry::KeyValue>,
     ) where
-        T: Into<std::borrow::Cow<'static, str>>,
+        N: Into<std::borrow::Cow<'static, str>>,
     {
         let event = Event::new(name, timestamp, attributes, 0);
 
-        let mut strong = self.etw_config.upgrade();
+        let mut strong = self.exporter_config.upgrade();
         if let Some(prov) = strong.as_mut() {
-            if let Ok(mut ebw) = self.ebw.lock() {
-                let _ = ebw.log_span_event(prov.as_ref(), event, self);
+            if let Some(event_exporter) = self.event_exporter.upgrade() {
+                let _ = event_exporter.log_span_event(prov.as_ref(), event, self);
             }
         }
     }
@@ -134,21 +139,21 @@ impl opentelemetry_api::trace::Span for RealtimeSpan {
         let already_ended = self.ended.swap(true, Ordering::Acquire);
 
         if !already_ended {
-            let mut strong = self.etw_config.upgrade();
+            let mut strong = self.exporter_config.upgrade();
             if let Some(config) = strong.as_mut() {
-                if let Ok(mut ebw) = self.ebw.lock() {
-                    let _ = ebw.log_span_end(config.as_ref(), self);
+                if let Some(event_exporter) = self.event_exporter.upgrade() {
+                    let _ = event_exporter.log_span_end(config.as_ref(), self);
                 }
             }
         }
     }
 
     fn is_recording(&self) -> bool {
-        let strong = self.etw_config.upgrade();
+        let strong = self.exporter_config.upgrade();
         if let Some(config) = strong {
             config
                 .get_provider()
-                .enabled(Level::Informational, config.get_span_keywords())
+                .enabled(Level::Informational.as_int(), config.get_span_keywords())
         } else {
             false
         }
@@ -166,48 +171,51 @@ impl opentelemetry_api::trace::Span for RealtimeSpan {
         &self.span_data.span_context
     }
 
-    fn update_name<T>(&mut self, new_name: T)
+    fn update_name<N>(&mut self, new_name: N)
     where
-        T: Into<std::borrow::Cow<'static, str>>,
+        N: Into<std::borrow::Cow<'static, str>>,
     {
         self.span_data.name = new_name.into();
     }
 }
 
-impl Drop for RealtimeSpan {
+impl<C: ExporterConfig, E: EventExporter> Drop for RealtimeSpan<C, E> {
     fn drop(&mut self) {
         <Self as opentelemetry_api::trace::Span>::end(self);
     }
 }
 
-impl EtwSpan for RealtimeSpan {
+impl<C: ExporterConfig, E: EventExporter> EtwSpan for RealtimeSpan<C, E> {
     fn get_span_data(&self) -> &SpanData {
         &self.span_data
     }
 }
 
-pub struct RealtimeTracer {
-    etw_config: Weak<EtwExporterConfig>,
+pub struct RealtimeTracer<C: ExporterConfig, E: EventExporter> {
+    exporter_config: Weak<C>,
     otel_config: Weak<opentelemetry_sdk::trace::Config>,
+    event_exporter: Weak<E>,
     instrumentation_lib: InstrumentationLibrary,
 }
 
-impl RealtimeTracer {
+impl<C: ExporterConfig, E: EventExporter> RealtimeTracer<C, E> {
     fn new(
-        etw_config: Weak<EtwExporterConfig>,
+        exporter_config: Weak<C>,
         otel_config: Weak<opentelemetry_sdk::trace::Config>,
+        event_exporter: Weak<E>,
         instrumentation_lib: InstrumentationLibrary,
     ) -> Self {
         RealtimeTracer {
-            etw_config,
+            exporter_config,
             otel_config,
+            event_exporter,
             instrumentation_lib,
         }
     }
 }
 
-impl opentelemetry_api::trace::Tracer for RealtimeTracer {
-    type Span = RealtimeSpan;
+impl<C: ExporterConfig, E: EventExporter> opentelemetry_api::trace::Tracer for RealtimeTracer<C, E> {
+    type Span = RealtimeSpan<C, E>;
 
     fn build_with_context(&self, builder: SpanBuilder, parent_cx: &Context) -> Self::Span {
         let parent_span = if parent_cx.has_active_span() {
@@ -218,8 +226,9 @@ impl opentelemetry_api::trace::Tracer for RealtimeTracer {
 
         let mut span = RealtimeSpan::build(
             builder,
-            self.etw_config.clone(),
+            self.exporter_config.clone(),
             self.otel_config.clone(),
+            self.event_exporter.clone(),
             parent_span,
             self.instrumentation_lib.clone(),
         );
@@ -228,12 +237,14 @@ impl opentelemetry_api::trace::Tracer for RealtimeTracer {
     }
 }
 
-pub struct RealtimeTracerProvider {
-    etw_config: Arc<EtwExporterConfig>,
+pub struct RealtimeTracerProvider<C: ExporterConfig, E: EventExporter> {
+    exporter_config: Arc<C>,
     otel_config: Arc<opentelemetry_sdk::trace::Config>,
+    event_exporter: Arc<E>,
 }
 
-impl RealtimeTracerProvider {
+#[cfg(all(target_os = "windows"))]
+impl RealtimeTracerProvider<EtwExporterConfig, EtwEventExporter> {
     pub(crate) fn new(
         provider_name: &str,
         otel_config: opentelemetry_sdk::trace::Config,
@@ -250,30 +261,66 @@ impl RealtimeTracerProvider {
             provider.as_ref().register();
         }
 
-        let etw_config = Arc::new(EtwExporterConfig {
+        let exporter_config = Arc::new(EtwExporterConfig {
             provider,
             span_keywords: 1,
             event_keywords: 2,
             links_keywords: 4,
-            bool_intype: if use_byte_for_bools {
-                InType::U8
-            } else {
-                InType::Bool32
-            },
             json: export_payload_as_json,
             common_schema,
             etw_activities,
         });
 
         RealtimeTracerProvider {
-            etw_config,
+            exporter_config,
             otel_config: Arc::new(otel_config),
+            event_exporter: Arc::new(EtwEventExporter::new(if use_byte_for_bools {
+                InType::U8
+            } else {
+                InType::Bool32
+            })),
         }
     }
 }
 
-impl opentelemetry_api::trace::TracerProvider for RealtimeTracerProvider {
-    type Tracer = RealtimeTracer;
+#[cfg(all(target_os = "linux"))]
+impl RealtimeTracerProvider<UserEventsExporterConfig, UserEventsExporter> {
+    pub(crate) fn new(
+        provider_name: &str,
+        otel_config: opentelemetry_sdk::trace::Config,
+        _use_byte_for_bools: bool,
+        export_payload_as_json: bool,
+        common_schema: bool,
+        etw_activities: bool,
+    ) -> Self {
+        let mut provider = linux_tld::Provider::new(provider_name, linux_tld::Provider::options().group_name(GROUP_NAME));
+        unsafe {
+            provider.register_set(linux_tlg::Level::Informational, 1);
+            provider.register_set(linux_tlg::Level::Verbose, 2);
+            provider.register_set(linux_tlg::Level::Verbose, 4);
+        }
+
+        let exporter_config = Arc::new(UserEventsExporterConfig {
+            provider: Arc::new(provider),
+            span_keywords: 1,
+            event_keywords: 2,
+            links_keywords: 4,
+            json: export_payload_as_json,
+            common_schema,
+            etw_activities,
+        });
+
+        RealtimeTracerProvider {
+            exporter_config,
+            otel_config: Arc::new(otel_config),
+            event_exporter: Arc::new(UserEventsExporter::new()),
+        }
+    }
+}
+
+
+impl<C: ExporterConfig, E: EventExporter> opentelemetry_api::trace::TracerProvider for RealtimeTracerProvider<C, E> {
+    type Tracer = RealtimeTracer<C, E>;
 
     fn tracer(&self, name: impl Into<std::borrow::Cow<'static, str>>) -> Self::Tracer {
         self.versioned_tracer(name, Some("4.0"), Some("https://microsoft.com/etw"))
@@ -299,8 +346,9 @@ impl opentelemetry_api::trace::TracerProvider for RealtimeTracerProvider {
         );
 
         RealtimeTracer::new(
-            Arc::downgrade(&self.etw_config),
+            Arc::downgrade(&self.exporter_config),
             Arc::downgrade(&self.otel_config),
+            Arc::downgrade(&self.event_exporter),
             instrumentation_lib,
         )
     }
