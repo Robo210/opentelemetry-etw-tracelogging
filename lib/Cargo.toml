@@ -20,8 +20,8 @@ default = []
 opentelemetry = "0.18"
 tracelogging = ">= 1.1.0"
 tracelogging_dynamic = ">= 1.1.0"
-linux_tlg = {version="0.1", path="T:\\LinuxTraceLogging\\rust\\tracelogging", package="tracelogging"}
-linux_tld = {version="0.1", path="T:\\LinuxTraceLogging\\rust\\tracelogging_dynamic", package="tracelogging_dynamic"}
+linux_tlg = {version="0.1", path="T:\\LinuxTraceLogging\\rust\\eventheader", package="eventheader"}
+linux_tld = {version="0.1", path="T:\\LinuxTraceLogging\\rust\\eventheader_dynamic", package="eventheader_dynamic"}
 opentelemetry_api = {version="0.18", default-features = false, features=["trace"]}
 opentelemetry_sdk = "0.18"
 futures-util = "0.3"

@@ -80,16 +80,16 @@ impl UserEventsExporter {
                     Array::Bool(v) => {
                         eb.add_value_sequence(
                             field_name,
-                            v.iter().map(|b| *b as u8),
+                            v.iter(),
                             FieldFormat::Boolean,
                             0,
                         );
                     }
                     Array::I64(v) => {
-                        eb.add_value_sequence(field_name, v.iter().map(|i| *i), FieldFormat::SignedInt, 0);
+                        eb.add_value_sequence(field_name, v.iter(), FieldFormat::SignedInt, 0);
                     }
                     Array::F64(v) => {
-                        eb.add_value_sequence(field_name, v.iter().map(|f| *f), FieldFormat::Float, 0);
+                        eb.add_value_sequence(field_name, v.iter(), FieldFormat::Float, 0);
                     }
                     Array::String(v) => {
                         eb.add_str_sequence(
