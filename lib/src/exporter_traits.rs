@@ -92,12 +92,12 @@ impl Activities {
             (None, String::default())
         } else {
             let parent_span_name = parent_span_id.to_string();
-            (Some(tracelogging::Guid::from_name(&parent_span_name).to_bytes_le()), parent_span_name)
+            (Some(tracelogging::Guid::from_name(&parent_span_name).to_bytes_be()), parent_span_name)
         };
 
         Activities {
             span_id: name,
-            activity_id: activity_id.to_bytes_le(),
+            activity_id: activity_id.to_bytes_be(),
             parent_activity_id,
             parent_span_id: parent_span_name,
             trace_id_name: trace_id.to_string(),

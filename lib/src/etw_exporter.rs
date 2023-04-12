@@ -218,8 +218,8 @@ impl EtwEventBuilderWrapper {
 
                 let win32err = self.write(
                     tlg_provider,
-                    Some(Guid::from_bytes_le(&activities.activity_id)).as_ref(),
-                    activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_le(g))).as_ref(),
+                    Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
+                    activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_be(g))).as_ref(),
                 );
 
                 if win32err != 0 {
@@ -285,8 +285,8 @@ impl EtwEventBuilderWrapper {
 
                 let win32err = self.write(
                     tlg_provider,
-                    Some(Guid::from_bytes_le(&activities.activity_id)).as_ref(),
-                    activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_le(g))).as_ref(),
+                    Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
+                    activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_be(g))).as_ref(),
                 );
 
                 if win32err != 0 {
@@ -378,8 +378,8 @@ impl EtwEventBuilderWrapper {
 
         let win32err = self.write(
             tlg_provider,
-            Some(Guid::from_bytes_le(&activities.activity_id)).as_ref(),
-            activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_le(g))).as_ref(),
+            Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
+            activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_be(g))).as_ref(),
         );
 
         if win32err != 0 {
@@ -806,8 +806,8 @@ impl EventExporter for EtwEventExporter {
 
         let win32err = ebw.write(
             &tlg_provider,
-            Some(Guid::from_bytes_le(&activities.activity_id)).as_ref(),
-            activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_le(g))).as_ref(),
+            Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
+            activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_be(g))).as_ref(),
         );
 
         if win32err != 0 {

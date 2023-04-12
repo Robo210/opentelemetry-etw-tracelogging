@@ -74,7 +74,7 @@ impl UserEventsExporter {
                     eb.add_value(field_name, *f, FieldFormat::Float, 0);
                 }
                 Value::String(s) => {
-                    eb.add_str(field_name, &s.to_string(), FieldFormat::StringUtfBom, 0);
+                    eb.add_str(field_name, &s.to_string(), FieldFormat::StringUtf, 0);
                 }
                 Value::Array(array) => match array {
                     Array::Bool(v) => {
@@ -95,7 +95,7 @@ impl UserEventsExporter {
                         eb.add_str_sequence(
                             field_name,
                             v.iter().map(|s| s.to_string()),
-                            FieldFormat::StringUtfBom,
+                            FieldFormat::StringUtf,
                             0,
                         );
                     }
@@ -130,7 +130,7 @@ impl UserEventsExporter {
             eb.add_str(
                 "Link",
                 std::fmt::format(format_args!("{:16x}", link.span_context.span_id())),
-                FieldFormat::StringUtfBom,
+                FieldFormat::StringUtf,
                 0,
             );
 
@@ -175,13 +175,13 @@ impl UserEventsExporter {
                 FIELD_TAG_IS_REAL_EVENT_TIME as u16,
             );
 
-            eb.add_str("SpanId", &activities.span_id, FieldFormat::StringUtfBom, 0);
+            eb.add_str("SpanId", &activities.span_id, FieldFormat::StringUtf, 0);
 
             if !activities.parent_span_id.is_empty() {
-                eb.add_str("ParentId", &activities.parent_span_id, FieldFormat::StringUtfBom, 0);
+                eb.add_str("ParentId", &activities.parent_span_id, FieldFormat::StringUtf, 0);
             }
 
-            eb.add_str("TraceId", &activities.trace_id_name, FieldFormat::StringUtfBom, 0);
+            eb.add_str("TraceId", &activities.trace_id_name, FieldFormat::StringUtf, 0);
 
             let mut added = false;
 
@@ -259,22 +259,22 @@ impl UserEventsExporter {
                     SpanKind::Consumer => "Consumer",
                     SpanKind::Internal => "Internal",
                 },
-                FieldFormat::StringUtfBom,
+                FieldFormat::StringUtf,
                 0,
             );
         }
 
         if let Status::Error { description } = &status {
-            eb.add_str("StatusMessage", description.to_string(), FieldFormat::StringUtfBom, 0);
+            eb.add_str("StatusMessage", description.to_string(), FieldFormat::StringUtf, 0);
         };
 
-        eb.add_str("SpanId", &activities.span_id, FieldFormat::StringUtfBom, 0);
+        eb.add_str("SpanId", &activities.span_id, FieldFormat::StringUtf, 0);
 
         if !activities.parent_span_id.is_empty() {
-            eb.add_str("ParentId", &activities.parent_span_id, FieldFormat::StringUtfBom, 0);
+            eb.add_str("ParentId", &activities.parent_span_id, FieldFormat::StringUtf, 0);
         }
 
-        eb.add_str("TraceId", &activities.trace_id_name, FieldFormat::StringUtfBom, 0);
+        eb.add_str("TraceId", &activities.trace_id_name, FieldFormat::StringUtf, 0);
 
         let mut added = false;
 
@@ -332,19 +332,19 @@ impl UserEventsExporter {
             let time: String = chrono::DateTime::to_rfc3339(
                 &chrono::DateTime::<chrono::Utc>::from(span_data.end_time),
             );
-            eb.add_str("time", time, FieldFormat::StringUtfBom, 0);
+            eb.add_str("time", time, FieldFormat::StringUtf, 0);
 
             eb.add_struct("ext_dt", 2, 0);
             {
-                eb.add_str("traceId", &trace_id, FieldFormat::StringUtfBom, 0);
-                eb.add_str("spanId", &span_id, FieldFormat::StringUtfBom, 0);
+                eb.add_str("traceId", &trace_id, FieldFormat::StringUtf, 0);
+                eb.add_str("spanId", &span_id, FieldFormat::StringUtf, 0);
             }
 
             // for ext in exts {
             //     eb.add_struct(ext.0, ext.1.len() as u8, 0);
 
             //     for field in ext.1 {
-            //         eb.add_str(field.0, field.1.as_ref(), FieldFormat::StringUtfBom, 0);
+            //         eb.add_str(field.0, field.1.as_ref(), FieldFormat::StringUtf, 0);
             //     }
             // }
         }
@@ -352,11 +352,11 @@ impl UserEventsExporter {
         // if !span_data.links.is_empty() {
         //     eb.add_struct("PartB", 5, 0);
         //     {
-        //         eb.add_str("_typeName", "SpanLink", FieldFormat::StringUtfBom, 0);
-        //         eb.add_str("fromTraceId", &traceId, FieldFormat::StringUtfBom, 0);
-        //         eb.add_str("fromSpanId", &spanId, FieldFormat::StringUtfBom, 0);
-        //         eb.add_str("toTraceId", "SpanLink", FieldFormat::StringUtfBom, 0);
-        //         eb.add_str("toSpanId", "SpanLink", FieldFormat::StringUtfBom, 0);
+        //         eb.add_str("_typeName", "SpanLink", FieldFormat::StringUtf, 0);
+        //         eb.add_str("fromTraceId", &traceId, FieldFormat::StringUtf, 0);
+        //         eb.add_str("fromSpanId", &spanId, FieldFormat::StringUtf, 0);
+        //         eb.add_str("toTraceId", "SpanLink", FieldFormat::StringUtf, 0);
+        //         eb.add_str("toSpanId", "SpanLink", FieldFormat::StringUtf, 0);
         //     }
         // }
 
@@ -376,16 +376,16 @@ impl UserEventsExporter {
 
         eb.add_struct("PartB", partb_field_count, 0);
         {
-            eb.add_str("_typeName", "Span", FieldFormat::StringUtfBom, 0);
+            eb.add_str("_typeName", "Span", FieldFormat::StringUtf, 0);
             if span_data.parent_span_id != SpanId::INVALID {
                 eb.add_str(
                     "parentId",
                     &span_data.parent_span_id.to_string(),
-                    FieldFormat::StringUtfBom,
+                    FieldFormat::StringUtf,
                     0,
                 );
             }
-            eb.add_str("name", name, FieldFormat::StringUtfBom, 0);
+            eb.add_str("name", name, FieldFormat::StringUtf, 0);
             eb.add_value(
                 "kind",
                 match span_data.span_kind {
@@ -403,7 +403,7 @@ impl UserEventsExporter {
                 &chrono::DateTime::to_rfc3339(&chrono::DateTime::<chrono::Utc>::from(
                     span_data.end_time,
                 )),
-                FieldFormat::StringUtfBom,
+                FieldFormat::StringUtf,
                 0,
             );
             eb.add_value(
@@ -416,7 +416,7 @@ impl UserEventsExporter {
                 0,
             );
             if !status_message.is_empty() {
-                eb.add_str("statusMessage", &status_message, FieldFormat::StringUtfBom, 0);
+                eb.add_str("statusMessage", &status_message, FieldFormat::StringUtf, 0);
             }
             // TODO: azureResourceProvider: string
             if !span_data.links.is_empty() {
@@ -676,13 +676,13 @@ impl EventExporter for UserEventsExporter {
             FIELD_TAG_IS_REAL_EVENT_TIME as u16,
         );
 
-        eb.add_str("SpanId", &activities.span_id, FieldFormat::StringUtfBom, 0);
+        eb.add_str("SpanId", &activities.span_id, FieldFormat::StringUtf, 0);
 
         if !activities.parent_span_id.is_empty() {
-            eb.add_str("ParentId", &activities.parent_span_id, FieldFormat::StringUtfBom, 0);
+            eb.add_str("ParentId", &activities.parent_span_id, FieldFormat::StringUtf, 0);
         }
 
-        eb.add_str("TraceId", &activities.trace_id_name, FieldFormat::StringUtfBom, 0);
+        eb.add_str("TraceId", &activities.trace_id_name, FieldFormat::StringUtf, 0);
 
         let mut added = false;
 
