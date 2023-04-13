@@ -234,9 +234,9 @@ impl UserEventsExporter {
             0
         };
         let (opcode, time_field_name) = if is_start {
-            (Opcode::Start, "StartTime")
+            (Opcode::ActivityStart, "StartTime")
         } else {
-            (Opcode::Stop, "EndTime")
+            (Opcode::ActivityStop, "EndTime")
         };
 
         eb.reset(name, event_tags as u16);
