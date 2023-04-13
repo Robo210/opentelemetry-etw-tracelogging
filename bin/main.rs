@@ -50,15 +50,18 @@ fn main() {
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        let tracer2 = otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name")
+        let tracer2 = otel_etw::span_exporter::new_etw_exporter("SampleProviderName")
             .with_common_schema_events()
+            .without_realtime_events()
             .with_async_runtime(EtwExporterAsyncRuntime::Tokio)
             .install();
 
         tracer2.in_span("RealtimeOuterSpanName", |cx| {
             std::thread::sleep(std::time::Duration::from_millis(1000));
 
-            let span = cx.span();
+            let mut span = cx.span();
+            span.set_attributes(vec![SAMPLE_KEY_INT.i64(5), SAMPLE_KEY_FLOAT.f64(7.1)]);
+
             span.add_event(
                 "RealtimeSampleEventName",
                 vec![SAMPLE_KEY_INT.i64(5), SAMPLE_KEY_FLOAT.f64(7.1)],
