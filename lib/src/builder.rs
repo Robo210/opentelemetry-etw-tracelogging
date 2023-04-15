@@ -1,4 +1,4 @@
-use crate::{batch_exporter::*};
+use crate::batch_exporter::*;
 use crate::realtime_exporter::*;
 use opentelemetry::global::GlobalTracerProvider;
 use opentelemetry_api::{global, trace::TracerProvider};

@@ -51,7 +51,7 @@
 //! requires events in this schema. Spans are exported asynchronously
 //! and in batches. Because of this, the timestamps on the ETW events do not
 //! represent the time the span was originally started or ended.
-//! 
+//!
 //! ## Span Links
 //!
 //! For non-Common Schema 4.0 events, each span link is exported as a separate ETW event.
@@ -59,7 +59,7 @@
 //! will match the span's activity ID. A `Link` field in the payload contains the linked
 //! span's ID, and any attributes for the link will be logged as additional payload fields.
 //! Links are not (currently) supported by the JSON exporter option (described below).
-//! 
+//!
 //! ## Example
 //!
 //! ```no_run
@@ -119,11 +119,11 @@ mod batch_exporter;
 mod builder;
 mod constants;
 mod error;
-mod json;
 mod etw_exporter;
-mod user_events_exporter;
 mod exporter_traits;
+mod json;
 mod realtime_exporter;
+mod user_events_exporter;
 
 pub mod span_exporter {
     pub use crate::batch_exporter::*;

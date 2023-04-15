@@ -1,11 +1,9 @@
-use std::{collections::HashMap, borrow::Cow};
+use std::{borrow::Cow, collections::HashMap};
 
-use opentelemetry::{Array, Value, Key};
+use opentelemetry::{Array, Key, Value};
 
 #[cfg(feature = "json")]
-pub(crate) fn get_attributes_as_json(
-    attribs: &mut dyn Iterator<Item = (&Key, &Value)>,
-) -> String {
+pub(crate) fn get_attributes_as_json(attribs: &mut dyn Iterator<Item = (&Key, &Value)>) -> String {
     let mut payload: std::collections::BTreeMap<String, serde_json::Value> = Default::default();
 
     for attrib in attribs {
@@ -43,9 +41,7 @@ pub(crate) fn get_attributes_as_json(
                         field_name.clone(),
                         serde_json::Value::Array(
                             v.iter()
-                                .map(|i| {
-                                    serde_json::Value::Number(serde_json::Number::from(*i))
-                                })
+                                .map(|i| serde_json::Value::Number(serde_json::Number::from(*i)))
                                 .collect(),
                         ),
                     );

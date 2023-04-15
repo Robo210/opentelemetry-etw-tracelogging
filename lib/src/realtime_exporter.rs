@@ -1,7 +1,7 @@
 use crate::constants::*;
-use crate::exporter_traits::*;
 #[allow(unused_imports)]
 use crate::etw_exporter::*;
+use crate::exporter_traits::*;
 #[allow(unused_imports)]
 use crate::user_events_exporter::*;
 use opentelemetry::InstrumentationLibrary;
@@ -214,7 +214,9 @@ impl<C: ExporterConfig, E: EventExporter> RealtimeTracer<C, E> {
     }
 }
 
-impl<C: ExporterConfig, E: EventExporter> opentelemetry_api::trace::Tracer for RealtimeTracer<C, E> {
+impl<C: ExporterConfig, E: EventExporter> opentelemetry_api::trace::Tracer
+    for RealtimeTracer<C, E>
+{
     type Span = RealtimeSpan<C, E>;
 
     fn build_with_context(&self, builder: SpanBuilder, parent_cx: &Context) -> Self::Span {
@@ -293,7 +295,10 @@ impl RealtimeTracerProvider<UserEventsExporterConfig, UserEventsExporter> {
         common_schema: bool,
         etw_activities: bool,
     ) -> Self {
-        let mut provider = linux_tld::Provider::new(provider_name, linux_tld::Provider::options().group_name(GROUP_NAME));
+        let mut provider = linux_tld::Provider::new(
+            provider_name,
+            linux_tld::Provider::options().group_name(GROUP_NAME),
+        );
         unsafe {
             // Standard real-time level/keyword pairs
             provider.register_set(linux_tlg::Level::Informational, 1);
@@ -323,8 +328,9 @@ impl RealtimeTracerProvider<UserEventsExporterConfig, UserEventsExporter> {
     }
 }
 
-
-impl<C: ExporterConfig, E: EventExporter> opentelemetry_api::trace::TracerProvider for RealtimeTracerProvider<C, E> {
+impl<C: ExporterConfig, E: EventExporter> opentelemetry_api::trace::TracerProvider
+    for RealtimeTracerProvider<C, E>
+{
     type Tracer = RealtimeTracer<C, E>;
 
     fn tracer(&self, name: impl Into<std::borrow::Cow<'static, str>>) -> Self::Tracer {

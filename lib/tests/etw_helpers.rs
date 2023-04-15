@@ -21,6 +21,9 @@ use windows::{
 
 use futures::*;
 
+// HRESULT_FROM_WIN32(ERROR_WMI_INSTANCE_NOT_FOUND)
+const ETW_SESSION_NOT_FOUND: windows::core::HRESULT = windows::core::HRESULT(-2147020695);
+
 #[repr(C)]
 pub struct EventTraceProperties {
     props: EVENT_TRACE_PROPERTIES,
@@ -164,63 +167,82 @@ impl Drop for ControlTraceHandle {
     }
 }
 
+pub fn start_etw_session(
+    sz_session_name: PCSTR,
+) -> Result<ControlTraceHandle, windows::core::Error> {
+    let mut session_handle: CONTROLTRACE_HANDLE = Default::default();
+    let mut properties = EventTraceProperties::new(false);
+    properties.set_session_name(sz_session_name);
+    properties.props = EVENT_TRACE_PROPERTIES {
+        Wnode: WNODE_HEADER {
+            ClientContext: 1,
+
+            ..properties.props.Wnode
+        },
+        BufferSize: 64,
+        MinimumBuffers: 4,
+        MaximumBuffers: 4,
+        LogFileMode: EVENT_TRACE_FILE_MODE_NONE | EVENT_TRACE_REAL_TIME_MODE,
+        NumberOfBuffers: 4,
+        FlushTimer: 1,
+
+        ..properties.props
+    };
+
+    unsafe {
+        let ptr = &mut properties.props as *mut EVENT_TRACE_PROPERTIES;
+        let err = StartTraceA(&mut session_handle, sz_session_name, ptr);
+
+        if err.is_err() {
+            Err(err.into())
+        } else {
+            Ok(ControlTraceHandle(session_handle))
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub fn get_etw_session(sz_session_name: PCSTR) -> Result<ControlTraceHandle, windows::core::Error> {
+    unsafe {
+        let mut properties = EventTraceProperties::new(true);
+        let err = ControlTraceA(
+            CONTROLTRACE_HANDLE::default(),
+            sz_session_name,
+            &mut properties.props,
+            EVENT_TRACE_CONTROL_QUERY,
+        );
+        if err.is_err() {
+            Err(err.into())
+        } else {
+            Ok(ControlTraceHandle(CONTROLTRACE_HANDLE(
+                properties.props.Wnode.Anonymous1.HistoricalContext,
+            )))
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub fn get_or_start_etw_session(
+    sz_session_name: PCSTR,
+    recreate_existing_session: bool,
+) -> Result<ControlTraceHandle, windows::core::Error> {
+    unsafe {
+        let existing_session = get_etw_session(sz_session_name);
+        if existing_session.is_ok() && recreate_existing_session {
+            drop(existing_session);
+            start_etw_session(sz_session_name)
+        } else if existing_session.is_err()
+            && existing_session.as_ref().unwrap_err_unchecked().code()
+                == ETW_SESSION_NOT_FOUND.into()
+        {
+            start_etw_session(sz_session_name)
+        } else {
+            existing_session
+        }
+    }
+}
+
 impl ControlTraceHandle {
-    pub fn start_session(
-        sz_session_name: PCSTR,
-    ) -> Result<ControlTraceHandle, windows::core::Error> {
-        let mut session_handle: CONTROLTRACE_HANDLE = Default::default();
-        let mut properties = EventTraceProperties::new(false);
-        properties.set_session_name(sz_session_name);
-        properties.props = EVENT_TRACE_PROPERTIES {
-            Wnode: WNODE_HEADER {
-                ClientContext: 1,
-
-                ..properties.props.Wnode
-            },
-            BufferSize: 64,
-            MinimumBuffers: 4,
-            MaximumBuffers: 4,
-            LogFileMode: EVENT_TRACE_FILE_MODE_NONE | EVENT_TRACE_REAL_TIME_MODE,
-            NumberOfBuffers: 4,
-            FlushTimer: 1,
-
-            ..properties.props
-        };
-
-        unsafe {
-            let ptr = &mut properties.props as *mut EVENT_TRACE_PROPERTIES;
-            let err = StartTraceA(&mut session_handle, sz_session_name, ptr);
-
-            if err.is_err() {
-                Err(err.into())
-            } else {
-                Ok(ControlTraceHandle(session_handle))
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn from_session(
-        sz_session_name: PCSTR,
-    ) -> Result<ControlTraceHandle, windows::core::Error> {
-        unsafe {
-            let mut properties = EventTraceProperties::new(true);
-            let err = ControlTraceA(
-                CONTROLTRACE_HANDLE::default(),
-                sz_session_name,
-                &mut properties.props,
-                EVENT_TRACE_CONTROL_QUERY,
-            );
-            if err.is_err() {
-                Err(err.into())
-            } else {
-                Ok(ControlTraceHandle(CONTROLTRACE_HANDLE(
-                    properties.props.Wnode.Anonymous1.HistoricalContext,
-                )))
-            }
-        }
-    }
-
     #[allow(dead_code)]
     pub fn manual_stop(self) -> ManuallyDrop<Self> {
         ManuallyDrop::new(self)
@@ -763,7 +785,7 @@ impl EtwEventConsumer2 {
 }
 
 #[cfg(test)]
-#[allow(dead_code, non_upper_case_globals)]
+#[allow(dead_code, non_upper_case_globals, unused_imports)]
 mod tests {
     use rsevents::Awaitable;
     use tracelogging::{Guid, Level};
@@ -808,7 +830,7 @@ mod tests {
         let provider_guid = windows::core::GUID::from_u128(provider.id().to_u128());
         let mut eb = tracelogging_dynamic::EventBuilder::new();
 
-        let h = ControlTraceHandle::start_session(sz_test_name)?;
+        let h = get_or_start_etw_session(sz_test_name, true)?;
         h.enable_provider(&provider_guid)?;
 
         //let h2 = ControlTraceHandle::from_session(sz_test_name)?.manual_stop();
@@ -867,7 +889,7 @@ mod tests {
         let provider_guid = windows::core::GUID::from_u128(provider.id().to_u128());
         let mut eb = tracelogging_dynamic::EventBuilder::new();
 
-        let h = ControlTraceHandle::start_session(sz_test_name)?;
+        let h = get_or_start_etw_session(sz_test_name, false)?;
         h.enable_provider(&provider_guid)?;
 
         //let h2 = ControlTraceHandle::from_session(sz_test_session_name)?.manual_stop();
@@ -925,7 +947,7 @@ mod tests {
         let provider_guid = windows::core::GUID::from_u128(provider.id().to_u128());
         let mut eb = tracelogging_dynamic::EventBuilder::new();
 
-        let h = ControlTraceHandle::start_session(sz_test_name)?;
+        let h = get_or_start_etw_session(sz_test_name, false)?;
         //let h = ControlTraceHandle::from_session(sz_test_name)?.manual_stop();
         h.enable_provider(&provider_guid)?;
 

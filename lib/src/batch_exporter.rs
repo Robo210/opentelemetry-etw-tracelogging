@@ -1,7 +1,7 @@
 use crate::constants::*;
-use crate::exporter_traits::*;
 #[allow(unused_imports)]
 use crate::etw_exporter::*;
+use crate::exporter_traits::*;
 #[allow(unused_imports)]
 use crate::user_events_exporter::*;
 use futures_util::future::BoxFuture;
@@ -58,7 +58,10 @@ impl BatchExporter<UserEventsExporterConfig, UserEventsExporter> {
         common_schema: bool,
         etw_activities: bool,
     ) -> Self {
-        let mut provider = linux_tld::Provider::new(provider_name, linux_tld::Provider::options().group_name(GROUP_NAME));
+        let mut provider = linux_tld::Provider::new(
+            provider_name,
+            linux_tld::Provider::options().group_name(GROUP_NAME),
+        );
         unsafe {
             // Standard real-time level/keyword pairs
             provider.register_set(linux_tlg::Level::Informational, 1);
@@ -87,13 +90,17 @@ impl BatchExporter<UserEventsExporterConfig, UserEventsExporter> {
     }
 }
 
-impl<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> Debug for BatchExporter<C, E> {
+impl<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> Debug
+    for BatchExporter<C, E>
+{
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
 
-impl<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> SpanExporter for BatchExporter<C, E> {
+impl<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> SpanExporter
+    for BatchExporter<C, E>
+{
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
         for span in batch {
             let _ = self.ebw.log_span_data(&self.config, &span);

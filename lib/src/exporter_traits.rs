@@ -50,7 +50,11 @@ pub trait EventExporter {
         S: opentelemetry_api::trace::Span + EtwSpan;
 
     // Called by the real-time exporter when a span is ended
-    fn log_span_end<C, S>(&self, provider: &C, span: &S) -> opentelemetry_sdk::export::trace::ExportResult
+    fn log_span_end<C, S>(
+        &self,
+        provider: &C,
+        span: &S,
+    ) -> opentelemetry_sdk::export::trace::ExportResult
     where
         C: ExporterConfig,
         S: opentelemetry_api::trace::Span + EtwSpan;
@@ -85,14 +89,21 @@ pub(crate) struct Activities {
 }
 
 impl Activities {
-    pub(crate) fn generate(span_id: &SpanId, parent_span_id: &SpanId, trace_id: &TraceId) -> Activities {
+    pub(crate) fn generate(
+        span_id: &SpanId,
+        parent_span_id: &SpanId,
+        trace_id: &TraceId,
+    ) -> Activities {
         let name = span_id.to_string();
         let activity_id = tracelogging::Guid::from_name(&name);
         let (parent_activity_id, parent_span_name) = if *parent_span_id == SpanId::INVALID {
             (None, String::default())
         } else {
             let parent_span_name = parent_span_id.to_string();
-            (Some(tracelogging::Guid::from_name(&parent_span_name).to_bytes_be()), parent_span_name)
+            (
+                Some(tracelogging::Guid::from_name(&parent_span_name).to_bytes_be()),
+                parent_span_name,
+            )
         };
 
         Activities {

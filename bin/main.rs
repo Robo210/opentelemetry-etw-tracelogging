@@ -30,7 +30,10 @@ fn main() {
                 vec![SAMPLE_KEY_INT.i64(5), SAMPLE_KEY_FLOAT.f64(7.1)],
             );
 
-            let link = Link::new(span.span_context().clone(), vec![SAMPLE_KEY_STR.string("link_attribute")]);
+            let link = Link::new(
+                span.span_context().clone(),
+                vec![SAMPLE_KEY_STR.string("link_attribute")],
+            );
 
             let span_builder = tracer2
                 .span_builder("InnerSpanName")

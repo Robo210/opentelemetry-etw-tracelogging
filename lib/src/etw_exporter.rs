@@ -9,9 +9,12 @@ use opentelemetry::{
     Key, Value,
 };
 use opentelemetry_sdk::export::trace::{ExportResult, SpanData};
+use std::cell::RefCell;
 use std::sync::Arc;
 use std::{pin::Pin, time::SystemTime};
 use tracelogging_dynamic::*;
+
+thread_local! {static EBW: RefCell<EtwEventBuilderWrapper> = RefCell::new(EtwEventBuilderWrapper::new());}
 
 #[derive(Clone)]
 pub(crate) struct EtwExporterConfig {
@@ -219,7 +222,11 @@ impl EtwEventBuilderWrapper {
                 let win32err = self.write(
                     tlg_provider,
                     Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
-                    activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_be(g))).as_ref(),
+                    activities
+                        .parent_activity_id
+                        .as_ref()
+                        .and_then(|g| Some(Guid::from_bytes_be(g)))
+                        .as_ref(),
                 );
 
                 if win32err != 0 {
@@ -271,7 +278,9 @@ impl EtwEventBuilderWrapper {
 
                 #[cfg(feature = "json")]
                 if export_payload_as_json {
-                    let json_string = json::get_attributes_as_json(&mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)));
+                    let json_string = json::get_attributes_as_json(
+                        &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                    );
                     self.add_str8("Payload", &json_string, OutType::Json, 0);
                     added = true;
                 }
@@ -286,7 +295,11 @@ impl EtwEventBuilderWrapper {
                 let win32err = self.write(
                     tlg_provider,
                     Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
-                    activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_be(g))).as_ref(),
+                    activities
+                        .parent_activity_id
+                        .as_ref()
+                        .and_then(|g| Some(Guid::from_bytes_be(g)))
+                        .as_ref(),
                 );
 
                 if win32err != 0 {
@@ -379,7 +392,11 @@ impl EtwEventBuilderWrapper {
         let win32err = self.write(
             tlg_provider,
             Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
-            activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_be(g))).as_ref(),
+            activities
+                .parent_activity_id
+                .as_ref()
+                .and_then(|g| Some(Guid::from_bytes_be(g)))
+                .as_ref(),
         );
 
         if win32err != 0 {
@@ -577,17 +594,15 @@ impl EtwEventExporter {
     #[allow(dead_code)]
     pub(crate) fn new(bool_representation: InType) -> EtwEventExporter {
         // Unfortunately we can't safely share a cached EventBuilder without adding undesirable locking
-        EtwEventExporter {bool_representation}
+        EtwEventExporter {
+            bool_representation,
+        }
     }
 }
 
 impl EventExporter for EtwEventExporter {
     // Called by the real-time exporter when a span is started
-    fn log_span_start<C, S>(
-        &self,
-        provider: &C,
-        span: &S,
-    ) -> ExportResult
+    fn log_span_start<C, S>(&self, provider: &C, span: &S) -> ExportResult
     where
         C: ExporterConfig,
         S: opentelemetry_api::trace::Span + EtwSpan,
@@ -599,7 +614,7 @@ impl EventExporter for EtwEventExporter {
 
         let tlg_provider = match provider.get_provider() {
             ProviderWrapper::Etw(p) => p,
-            _ => panic!()
+            _ => panic!(),
         };
         let span_keywords = provider.get_span_keywords();
 
@@ -673,7 +688,7 @@ impl EventExporter for EtwEventExporter {
         let export_payload_as_json = provider.get_export_as_json();
         let tlg_provider = match provider.get_provider() {
             ProviderWrapper::Etw(p) => p,
-            _ => panic!()
+            _ => panic!(),
         };
         let span_data = span.get_span_data();
 
@@ -738,7 +753,7 @@ impl EventExporter for EtwEventExporter {
         let event_keywords = provider.get_event_keywords();
         let tlg_provider = match provider.get_provider() {
             ProviderWrapper::Etw(p) => p,
-            _ => panic!()
+            _ => panic!(),
         };
 
         if !tlg_provider.enabled(Level::Informational, event_keywords)
@@ -792,7 +807,9 @@ impl EventExporter for EtwEventExporter {
 
         #[cfg(feature = "json")]
         if export_payload_as_json {
-            let json_string = json::get_attributes_as_json(&mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)));
+            let json_string = json::get_attributes_as_json(
+                &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+            );
             ebw.add_str8("Payload", &json_string, OutType::Json, 0);
             added = true;
         }
@@ -807,7 +824,11 @@ impl EventExporter for EtwEventExporter {
         let win32err = ebw.write(
             &tlg_provider,
             Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
-            activities.parent_activity_id.as_ref().and_then(|g| Some(Guid::from_bytes_be(g))).as_ref(),
+            activities
+                .parent_activity_id
+                .as_ref()
+                .and_then(|g| Some(Guid::from_bytes_be(g)))
+                .as_ref(),
         );
 
         if win32err != 0 {
@@ -818,11 +839,7 @@ impl EventExporter for EtwEventExporter {
     }
 
     // Called by the batch exporter sometime after span is completed
-    fn log_span_data<C>(
-        &self,
-        provider: &C,
-        span_data: &SpanData,
-    ) -> ExportResult
+    fn log_span_data<C>(&self, provider: &C, span_data: &SpanData) -> ExportResult
     where
         C: ExporterConfig,
     {
@@ -837,7 +854,7 @@ impl EventExporter for EtwEventExporter {
         let export_payload_as_json = provider.get_export_as_json();
         let tlg_provider = match provider.get_provider() {
             ProviderWrapper::Etw(p) => p,
-            _ => panic!()
+            _ => panic!(),
         };
 
         let level = match span_data.status {
@@ -846,95 +863,96 @@ impl EventExporter for EtwEventExporter {
             Status::Unset => Level::Verbose,
         };
 
-        // TODO: We should be caching this and reusing it for the entire batch export
-        let mut ebw = EtwEventBuilderWrapper::new();
+        EBW.with(|ebw| {
+            let mut ebw = ebw.borrow_mut();
+            let mut err = Ok(());
 
-        let mut err = Ok(());
-        if tlg_provider.enabled(level, span_keywords) && provider.get_export_span_events() {
-            let activities = Activities::generate(
-                &span_data.span_context.span_id(),
-                &span_data.parent_span_id,
-                &span_data.span_context.trace_id(),
-            );
+            if tlg_provider.enabled(level, span_keywords) && provider.get_export_span_events() {
+                let activities = Activities::generate(
+                    &span_data.span_context.span_id(),
+                    &span_data.parent_span_id,
+                    &span_data.span_context.trace_id(),
+                );
 
-            err = ebw
-                .write_span_event(
-                    &tlg_provider.as_ref(),
-                    &span_data.name,
-                    level,
-                    span_keywords,
-                    &activities,
-                    &span_data.start_time,
-                    Some(&span_data.span_kind),
-                    &span_data.status,
-                    &mut std::iter::empty(),
-                    true,
-                    true,
-                    use_byte_for_bools,
-                    export_payload_as_json,
-                )
-                .and_then(|_| {
-                    ebw.write_span_events(
-                        &tlg_provider.as_ref(),
-                        Level::Verbose,
-                        event_keywords,
-                        &activities,
-                        &mut span_data.events.iter(),
-                        use_byte_for_bools,
-                        export_payload_as_json,
-                    )
-                })
-                .and_then(|_| {
-                    ebw.write_span_links(
-                        &tlg_provider.as_ref(),
-                        Level::Verbose,
-                        links_keywords,
-                        &activities,
-                        &span_data.name,
-                        &span_data.start_time,
-                        &mut span_data.links.iter(),
-                        use_byte_for_bools,
-                    )
-                })
-                .and_then(|_| {
-                    ebw.write_span_event(
+                err = ebw
+                    .write_span_event(
                         &tlg_provider.as_ref(),
                         &span_data.name,
                         level,
                         span_keywords,
                         &activities,
-                        &span_data.end_time,
+                        &span_data.start_time,
                         Some(&span_data.span_kind),
                         &span_data.status,
-                        &mut span_data.attributes.iter(),
-                        false,
+                        &mut std::iter::empty(),
+                        true,
                         true,
                         use_byte_for_bools,
                         export_payload_as_json,
                     )
-                });
-        }
+                    .and_then(|_| {
+                        ebw.write_span_events(
+                            &tlg_provider.as_ref(),
+                            Level::Verbose,
+                            event_keywords,
+                            &activities,
+                            &mut span_data.events.iter(),
+                            use_byte_for_bools,
+                            export_payload_as_json,
+                        )
+                    })
+                    .and_then(|_| {
+                        ebw.write_span_links(
+                            &tlg_provider.as_ref(),
+                            Level::Verbose,
+                            links_keywords,
+                            &activities,
+                            &span_data.name,
+                            &span_data.start_time,
+                            &mut span_data.links.iter(),
+                            use_byte_for_bools,
+                        )
+                    })
+                    .and_then(|_| {
+                        ebw.write_span_event(
+                            &tlg_provider.as_ref(),
+                            &span_data.name,
+                            level,
+                            span_keywords,
+                            &activities,
+                            &span_data.end_time,
+                            Some(&span_data.span_kind),
+                            &span_data.status,
+                            &mut span_data.attributes.iter(),
+                            false,
+                            true,
+                            use_byte_for_bools,
+                            export_payload_as_json,
+                        )
+                    });
+            }
 
-        if tlg_provider.enabled(Level::Informational, span_keywords)
-            && provider.get_export_common_schema_event()
-        {
-            let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
+            if tlg_provider.enabled(Level::Informational, span_keywords)
+                && provider.get_export_common_schema_event()
+            {
+                let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
 
-            let err2 = ebw.write_common_schema_span(
-                &tlg_provider.as_ref(),
-                &span_data.name,
-                Level::Informational,
-                span_keywords,
-                span_data,
-                &span_data.span_context,
-                export_payload_as_json,
-                attributes,
-            );
+                let err2 = ebw.write_common_schema_span(
+                    &tlg_provider.as_ref(),
+                    &span_data.name,
+                    Level::Informational,
+                    span_keywords,
+                    span_data,
+                    &span_data.span_context,
+                    export_payload_as_json,
+                    attributes,
+                );
 
-            err = err.and(err2);
-        }
+                err = err.and(err2);
+            }
 
-        err
+            err
+        })
     }
 }
 

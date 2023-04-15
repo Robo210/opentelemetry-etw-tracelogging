@@ -45,7 +45,7 @@ mod functional {
             .without_realtime_events()
             .install();
 
-        let h = ControlTraceHandle::start_session(sz_test_session_name)?;
+        let h = get_or_start_etw_session(sz_test_session_name, false)?;
         h.enable_provider(&test_provider_id)?;
 
         let mut consumer = EtwEventConsumer2::new();
