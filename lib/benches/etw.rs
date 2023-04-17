@@ -112,7 +112,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let exporter = EtwEventExporter::new(provider, tracelogging::InType::Bool32);
     let mut config = BenchExporterConfig{export_common_schema_event: false, export_span_events: false};
 
-    let mut group = c.benchmark_group("export cs4");
+    let mut group = c.benchmark_group("export span_data");
 
     group.bench_function("provider disabled", |b| {
         b.iter(|| (exporter.log_span_data(&config, &span_data)))

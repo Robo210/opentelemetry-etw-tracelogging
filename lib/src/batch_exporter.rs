@@ -75,7 +75,6 @@ impl BatchExporter<UserEventsExporterConfig, UserEventsExporter> {
 
         let exporter = BatchExporter {
             config: UserEventsExporterConfig {
-                provider: Arc::new(provider),
                 span_keywords: 1,
                 event_keywords: 2,
                 links_keywords: 4,
@@ -83,7 +82,7 @@ impl BatchExporter<UserEventsExporterConfig, UserEventsExporter> {
                 common_schema,
                 etw_activities,
             },
-            ebw: UserEventsExporter::new(),
+            ebw: UserEventsExporter::new(Arc::new(provider)),
         };
 
         exporter
