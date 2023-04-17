@@ -62,16 +62,15 @@ impl BatchExporter<UserEventsExporterConfig, UserEventsExporter> {
             provider_name,
             linux_tld::Provider::options().group_name(GROUP_NAME),
         );
-        unsafe {
-            // Standard real-time level/keyword pairs
-            provider.register_set(linux_tlg::Level::Informational, 1);
-            provider.register_set(linux_tlg::Level::Verbose, 2);
-            provider.register_set(linux_tlg::Level::Verbose, 4);
 
-            // Common Schema events use a level based on a span's Status
-            provider.register_set(linux_tlg::Level::Error, 1);
-            provider.register_set(linux_tlg::Level::Verbose, 1);
-        }
+        // Standard real-time level/keyword pairs
+        provider.register_set(linux_tlg::Level::Informational, 1);
+        provider.register_set(linux_tlg::Level::Verbose, 2);
+        provider.register_set(linux_tlg::Level::Verbose, 4);
+
+        // Common Schema events use a level based on a span's Status
+        provider.register_set(linux_tlg::Level::Error, 1);
+        provider.register_set(linux_tlg::Level::Verbose, 1);
 
         let exporter = BatchExporter {
             config: UserEventsExporterConfig {

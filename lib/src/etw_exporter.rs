@@ -9,7 +9,6 @@ use opentelemetry::{
     Key, Value,
 };
 use opentelemetry_sdk::export::trace::{ExportResult, SpanData};
-use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::io::{Cursor, Write};
