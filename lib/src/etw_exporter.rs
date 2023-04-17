@@ -9,7 +9,11 @@ use opentelemetry::{
     Key, Value,
 };
 use opentelemetry_sdk::export::trace::{ExportResult, SpanData};
+use std::borrow::Borrow;
+use std::borrow::Cow;
 use std::cell::RefCell;
+use std::io::{Cursor, Write};
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 use std::{pin::Pin, time::SystemTime};
 use tracelogging_dynamic::*;
@@ -420,8 +424,21 @@ impl EtwEventBuilderWrapper {
     where
         C: IntoIterator<Item = (&'a Key, &'a Value)>,
     {
-        let trace_id = span_context.trace_id().to_string();
-        let span_id = span_context.span_id().to_string();
+        // Avoid allocations for these fixed-length strings
+
+        let trace_id = unsafe {
+            let mut trace_id = MaybeUninit::<[u8; 32]>::uninit();
+            let mut cur = Cursor::new((&mut *trace_id.as_mut_ptr()).as_mut_slice());
+            write!(&mut cur, "{:32x}", span_context.trace_id()).expect("!write");
+            trace_id.assume_init()
+        };
+
+        let span_id = unsafe {
+            let mut span_id = MaybeUninit::<[u8; 16]>::uninit();
+            let mut cur = Cursor::new((&mut *span_id.as_mut_ptr()).as_mut_slice());
+            write!(&mut cur, "{:16x}", span_context.span_id()).expect("!write");
+            span_id.assume_init()
+        };
 
         let event_tags: u32 = 0; // TODO
         self.reset(name, level, keywords, event_tags);
@@ -465,14 +482,14 @@ impl EtwEventBuilderWrapper {
         //     }
         // }
 
-        let mut status_message: String = String::default();
+        let mut status_message: Cow<str> = Cow::default();
         let mut partb_field_count = 5u8;
         if span_data.parent_span_id != SpanId::INVALID {
             partb_field_count += 1;
         }
         if let Status::Error { description } = &span_data.status {
             partb_field_count += 1;
-            status_message = description.to_string();
+            status_message = Cow::Borrowed(description);
         }
         // TODO: azureResourceProvider: string
         if !span_data.links.is_empty() {
@@ -521,7 +538,7 @@ impl EtwEventBuilderWrapper {
                 0,
             );
             if !status_message.is_empty() {
-                self.add_str8("statusMessage", &status_message, OutType::Utf8, 0);
+                self.add_str8("statusMessage", status_message.as_ref(), OutType::Utf8, 0);
             }
             // TODO: azureResourceProvider: string
             if !span_data.links.is_empty() {
@@ -935,7 +952,7 @@ impl EventExporter for EtwEventExporter {
             if tlg_provider.enabled(Level::Informational, span_keywords)
                 && provider.get_export_common_schema_event()
             {
-                let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
+                let attributes = span_data.attributes.iter(); //.chain(span_data.resource.iter());
 
                 let err2 = ebw.write_common_schema_span(
                     &tlg_provider.as_ref(),

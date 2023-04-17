@@ -13,16 +13,10 @@ mod json;
 
 use crate::etw_helpers::*;
 use crate::exporter_traits::*;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use etw_exporter::EtwEventExporter;
+use opentelemetry::trace::{SpanContext, SpanId, SpanKind, TraceFlags, TraceState};
 use opentelemetry::InstrumentationLibrary;
-use opentelemetry::{
-    trace::{
-        Event, SpanBuilder, SpanContext, SpanId, SpanKind, TraceContextExt, TraceFlags, TraceState,
-    },
-    Context,
-};
-use opentelemetry_api::trace::SpanRef;
 use opentelemetry_sdk::{
     export::trace::SpanData,
     trace::{EvictedHashMap, EvictedQueue},
@@ -57,7 +51,7 @@ impl ExporterConfig for BenchExporterConfig {
         true
     }
     fn get_export_span_events(&self) -> bool {
-        false
+        true
     }
 }
 
@@ -127,8 +121,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| (exporter.log_span_data(&config, &span_data)))
     });
 
-    let h =
-        get_or_start_etw_session(windows::s!("otel-bench"), true).expect("can't start etw session");
+    let h = EtwSession::get_or_start_etw_session(windows::s!("otel-bench"), true)
+        .expect("can't start etw session");
 
     h.enable_provider(&windows::core::GUID::from_u128(provider_id.to_u128()))
         .unwrap();
