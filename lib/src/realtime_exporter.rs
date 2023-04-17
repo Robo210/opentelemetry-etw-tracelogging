@@ -311,7 +311,6 @@ impl RealtimeTracerProvider<UserEventsExporterConfig, UserEventsExporter> {
         }
 
         let exporter_config = Arc::new(UserEventsExporterConfig {
-            provider: Arc::new(provider),
             span_keywords: 1,
             event_keywords: 2,
             links_keywords: 4,
@@ -323,7 +322,7 @@ impl RealtimeTracerProvider<UserEventsExporterConfig, UserEventsExporter> {
         RealtimeTracerProvider {
             exporter_config,
             otel_config: Arc::new(otel_config),
-            event_exporter: Arc::new(UserEventsExporter::new()),
+            event_exporter: Arc::new(UserEventsExporter::new(provider)),
         }
     }
 }
