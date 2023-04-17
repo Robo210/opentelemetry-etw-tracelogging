@@ -23,18 +23,15 @@ use opentelemetry_sdk::{
 };
 use rsevents::Awaitable;
 use std::borrow::Cow;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 struct BenchExporterConfig {
-    provider: Pin<Arc<tracelogging_dynamic::Provider>>,
+    export_common_schema_event: bool,
+    export_span_events: bool,
 }
 
 impl ExporterConfig for BenchExporterConfig {
-    fn get_provider(&self) -> ProviderWrapper {
-        ProviderWrapper::Etw(self.provider.clone())
-    }
     fn get_span_keywords(&self) -> u64 {
         1
     }
@@ -48,10 +45,10 @@ impl ExporterConfig for BenchExporterConfig {
         false
     }
     fn get_export_common_schema_event(&self) -> bool {
-        true
+        self.export_common_schema_event
     }
     fn get_export_span_events(&self) -> bool {
-        true
+        self.export_span_events
     }
 }
 
@@ -86,7 +83,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         provider.as_ref().register();
     }
     let provider_id = provider.id().clone();
-    let config = BenchExporterConfig { provider };
 
     let instrumentation_lib = InstrumentationLibrary::new(Cow::Borrowed("bench"), None, None);
 
@@ -113,7 +109,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         instrumentation_lib,
     };
 
-    let exporter = EtwEventExporter::new(tracelogging::InType::Bool32);
+    let exporter = EtwEventExporter::new(provider, tracelogging::InType::Bool32);
+    let mut config = BenchExporterConfig{export_common_schema_event: false, export_span_events: false};
 
     let mut group = c.benchmark_group("export cs4");
 
@@ -129,7 +126,22 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     BENCH_PROVIDER_ENABLED_EVENT.wait();
 
-    group.bench_function("provider enabled", |b| {
+    config.export_common_schema_event = true;
+
+    group.bench_function("provider enabled/cs4", |b| {
+        b.iter(|| (exporter.log_span_data(&config, &span_data)))
+    });
+
+    config.export_common_schema_event = false;
+    config.export_span_events = true;
+
+    group.bench_function("provider enabled/span", |b| {
+        b.iter(|| (exporter.log_span_data(&config, &span_data)))
+    });
+
+    config.export_common_schema_event = true;
+
+    group.bench_function("provider enabled/cs4+span", |b| {
         b.iter(|| (exporter.log_span_data(&config, &span_data)))
     });
 }

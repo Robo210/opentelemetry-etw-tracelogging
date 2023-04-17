@@ -22,7 +22,6 @@ thread_local! {static EBW: RefCell<EtwEventBuilderWrapper> = RefCell::new(EtwEve
 
 #[derive(Clone)]
 pub(crate) struct EtwExporterConfig {
-    pub(crate) provider: Pin<Arc<Provider>>,
     pub(crate) span_keywords: u64,
     pub(crate) event_keywords: u64,
     pub(crate) links_keywords: u64,
@@ -32,10 +31,6 @@ pub(crate) struct EtwExporterConfig {
 }
 
 impl ExporterConfig for EtwExporterConfig {
-    fn get_provider(&self) -> ProviderWrapper {
-        ProviderWrapper::Etw(self.provider.clone())
-    }
-
     fn get_span_keywords(&self) -> u64 {
         self.span_keywords
     }
@@ -604,20 +599,26 @@ impl std::ops::DerefMut for EtwEventBuilderWrapper {
 }
 
 pub(crate) struct EtwEventExporter {
+    provider: Pin<Arc<Provider>>,
     bool_representation: InType,
 }
 
 impl EtwEventExporter {
     #[allow(dead_code)]
-    pub(crate) fn new(bool_representation: InType) -> EtwEventExporter {
+    pub(crate) fn new(provider: Pin<Arc<Provider>>, bool_representation: InType) -> EtwEventExporter {
         // Unfortunately we can't safely share a cached EventBuilder without adding undesirable locking
         EtwEventExporter {
+            provider,
             bool_representation,
         }
     }
 }
 
 impl EventExporter for EtwEventExporter {
+    fn enabled(&self, level: u8, keyword: u64) -> bool {
+        self.provider.enabled(level.into(), keyword)
+    }
+
     // Called by the real-time exporter when a span is started
     fn log_span_start<C, S>(&self, provider: &C, span: &S) -> ExportResult
     where
@@ -629,13 +630,9 @@ impl EventExporter for EtwEventExporter {
             return Ok(());
         }
 
-        let tlg_provider = match provider.get_provider() {
-            ProviderWrapper::Etw(p) => p,
-            _ => panic!(),
-        };
         let span_keywords = provider.get_span_keywords();
 
-        if !tlg_provider.enabled(Level::Informational, span_keywords) {
+        if !self.provider.enabled(Level::Informational, span_keywords) {
             return Ok(());
         }
 
@@ -660,7 +657,7 @@ impl EventExporter for EtwEventExporter {
         let mut ebw = EtwEventBuilderWrapper::new();
 
         ebw.write_span_event(
-            &tlg_provider.as_ref(),
+            &self.provider.as_ref(),
             &span_data.name,
             Level::Informational,
             span_keywords,
@@ -676,7 +673,7 @@ impl EventExporter for EtwEventExporter {
         )?;
 
         ebw.write_span_links(
-            &tlg_provider.as_ref(),
+            &self.provider.as_ref(),
             Level::Verbose,
             links_keywords,
             &activities,
@@ -703,15 +700,12 @@ impl EventExporter for EtwEventExporter {
             _ => panic!("unsupported bool representation"),
         };
         let export_payload_as_json = provider.get_export_as_json();
-        let tlg_provider = match provider.get_provider() {
-            ProviderWrapper::Etw(p) => p,
-            _ => panic!(),
-        };
+
         let span_data = span.get_span_data();
 
         let mut ebw = EtwEventBuilderWrapper::new();
 
-        if tlg_provider.enabled(Level::Informational, span_keywords)
+        if self.provider.enabled(Level::Informational, span_keywords)
             && provider.get_export_span_events()
         {
             let activities = Activities::generate(
@@ -721,7 +715,7 @@ impl EventExporter for EtwEventExporter {
             );
 
             ebw.write_span_event(
-                &tlg_provider.as_ref(),
+                &self.provider.as_ref(),
                 &span_data.name,
                 Level::Informational,
                 span_keywords,
@@ -737,12 +731,12 @@ impl EventExporter for EtwEventExporter {
             )?;
         }
 
-        if tlg_provider.enabled(Level::Informational, span_keywords)
+        if self.provider.enabled(Level::Informational, span_keywords)
             && provider.get_export_common_schema_event()
         {
             let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
             ebw.write_common_schema_span(
-                &tlg_provider.as_ref(),
+                &self.provider.as_ref(),
                 &span_data.name,
                 Level::Informational,
                 span_keywords,
@@ -768,12 +762,8 @@ impl EventExporter for EtwEventExporter {
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
         let event_keywords = provider.get_event_keywords();
-        let tlg_provider = match provider.get_provider() {
-            ProviderWrapper::Etw(p) => p,
-            _ => panic!(),
-        };
 
-        if !tlg_provider.enabled(Level::Informational, event_keywords)
+        if !self.provider.enabled(Level::Informational, event_keywords)
             || !provider.get_export_span_events()
         {
             // TODO: Common Schema PartB SpanEvent events
@@ -839,7 +829,7 @@ impl EventExporter for EtwEventExporter {
         }
 
         let win32err = ebw.write(
-            &tlg_provider,
+            &self.provider,
             Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
             activities
                 .parent_activity_id
@@ -869,10 +859,6 @@ impl EventExporter for EtwEventExporter {
             _ => panic!("unsupported bool representation"),
         };
         let export_payload_as_json = provider.get_export_as_json();
-        let tlg_provider = match provider.get_provider() {
-            ProviderWrapper::Etw(p) => p,
-            _ => panic!(),
-        };
 
         let level = match span_data.status {
             Status::Ok => Level::Informational,
@@ -884,7 +870,7 @@ impl EventExporter for EtwEventExporter {
             let mut ebw = ebw.borrow_mut();
             let mut err = Ok(());
 
-            if tlg_provider.enabled(level, span_keywords) && provider.get_export_span_events() {
+            if self.provider.enabled(level, span_keywords) && provider.get_export_span_events() {
                 let activities = Activities::generate(
                     &span_data.span_context.span_id(),
                     &span_data.parent_span_id,
@@ -893,7 +879,7 @@ impl EventExporter for EtwEventExporter {
 
                 err = ebw
                     .write_span_event(
-                        &tlg_provider.as_ref(),
+                        &self.provider.as_ref(),
                         &span_data.name,
                         level,
                         span_keywords,
@@ -909,7 +895,7 @@ impl EventExporter for EtwEventExporter {
                     )
                     .and_then(|_| {
                         ebw.write_span_events(
-                            &tlg_provider.as_ref(),
+                            &self.provider.as_ref(),
                             Level::Verbose,
                             event_keywords,
                             &activities,
@@ -920,7 +906,7 @@ impl EventExporter for EtwEventExporter {
                     })
                     .and_then(|_| {
                         ebw.write_span_links(
-                            &tlg_provider.as_ref(),
+                            &self.provider.as_ref(),
                             Level::Verbose,
                             links_keywords,
                             &activities,
@@ -932,7 +918,7 @@ impl EventExporter for EtwEventExporter {
                     })
                     .and_then(|_| {
                         ebw.write_span_event(
-                            &tlg_provider.as_ref(),
+                            &self.provider.as_ref(),
                             &span_data.name,
                             level,
                             span_keywords,
@@ -949,13 +935,13 @@ impl EventExporter for EtwEventExporter {
                     });
             }
 
-            if tlg_provider.enabled(Level::Informational, span_keywords)
+            if self.provider.enabled(Level::Informational, span_keywords)
                 && provider.get_export_common_schema_event()
             {
                 let attributes = span_data.attributes.iter(); //.chain(span_data.resource.iter());
 
                 let err2 = ebw.write_common_schema_span(
-                    &tlg_provider.as_ref(),
+                    &self.provider.as_ref(),
                     &span_data.name,
                     Level::Informational,
                     span_keywords,

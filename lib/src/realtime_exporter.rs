@@ -139,8 +139,7 @@ impl<C: ExporterConfig, E: EventExporter> opentelemetry_api::trace::Span for Rea
         let already_ended = self.ended.swap(true, Ordering::Acquire);
 
         if !already_ended {
-            let mut strong = self.exporter_config.upgrade();
-            if let Some(config) = strong.as_mut() {
+            if let Some(config) = self.exporter_config.upgrade() {
                 if let Some(event_exporter) = self.event_exporter.upgrade() {
                     let _ = event_exporter.log_span_end(config.as_ref(), self);
                 }
@@ -149,11 +148,12 @@ impl<C: ExporterConfig, E: EventExporter> opentelemetry_api::trace::Span for Rea
     }
 
     fn is_recording(&self) -> bool {
-        let strong = self.exporter_config.upgrade();
-        if let Some(config) = strong {
-            config
-                .get_provider()
-                .enabled(Level::Informational.as_int(), config.get_span_keywords())
+        if let Some(config) = self.exporter_config.upgrade() {
+            if let Some(event_exporter) = self.event_exporter.upgrade() {
+                event_exporter.enabled(Level::Informational.as_int(), config.get_span_keywords())
+            } else {
+                false
+            }
         } else {
             false
         }
@@ -264,7 +264,6 @@ impl RealtimeTracerProvider<EtwExporterConfig, EtwEventExporter> {
         }
 
         let exporter_config = Arc::new(EtwExporterConfig {
-            provider,
             span_keywords: 1,
             event_keywords: 2,
             links_keywords: 4,
@@ -276,7 +275,8 @@ impl RealtimeTracerProvider<EtwExporterConfig, EtwEventExporter> {
         RealtimeTracerProvider {
             exporter_config,
             otel_config: Arc::new(otel_config),
-            event_exporter: Arc::new(EtwEventExporter::new(if use_byte_for_bools {
+            event_exporter: Arc::new(EtwEventExporter::new(provider,
+                if use_byte_for_bools {
                 InType::U8
             } else {
                 InType::Bool32

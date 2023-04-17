@@ -1,36 +1,11 @@
 use std::{
     io::{Cursor, Write},
     mem::MaybeUninit,
-    pin::Pin,
-    sync::Arc,
 };
 
 use opentelemetry::trace::{SpanId, TraceId};
 
-pub enum ProviderWrapper {
-    //fn enabled(&self, level: u8, keyword: u64) -> bool;
-    Etw(Pin<Arc<tracelogging_dynamic::Provider>>),
-    UserEvents(Arc<linux_tld::Provider>),
-}
-
-impl ProviderWrapper {
-    pub(crate) fn enabled(&self, level: u8, keyword: u64) -> bool {
-        match self {
-            ProviderWrapper::Etw(p) => p.enabled(level.into(), keyword),
-            ProviderWrapper::UserEvents(p) => {
-                let es = p.find_set(level.into(), keyword);
-                if let Some(es) = es {
-                    es.enabled()
-                } else {
-                    false
-                }
-            }
-        }
-    }
-}
-
 pub trait ExporterConfig {
-    fn get_provider(&self) -> ProviderWrapper;
     fn get_span_keywords(&self) -> u64;
     fn get_event_keywords(&self) -> u64;
     fn get_links_keywords(&self) -> u64;
@@ -44,6 +19,8 @@ pub trait EtwSpan {
 }
 
 pub trait EventExporter {
+    fn enabled(&self, level: u8, keyword: u64) -> bool;
+
     // Called by the real-time exporter when a span is started
     fn log_span_start<C, S>(
         &self,

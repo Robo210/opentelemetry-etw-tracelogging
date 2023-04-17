@@ -32,7 +32,6 @@ impl BatchExporter<EtwExporterConfig, EtwEventExporter> {
         }
         BatchExporter {
             config: EtwExporterConfig {
-                provider,
                 span_keywords: 1,
                 event_keywords: 2,
                 links_keywords: 4,
@@ -40,7 +39,8 @@ impl BatchExporter<EtwExporterConfig, EtwEventExporter> {
                 common_schema,
                 etw_activities,
             },
-            ebw: EtwEventExporter::new(if use_byte_for_bools {
+            ebw: EtwEventExporter::new(provider,
+                if use_byte_for_bools {
                 tracelogging::InType::U8
             } else {
                 tracelogging::InType::Bool32
