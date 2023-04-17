@@ -322,7 +322,7 @@ impl RealtimeTracerProvider<UserEventsExporterConfig, UserEventsExporter> {
         RealtimeTracerProvider {
             exporter_config,
             otel_config: Arc::new(otel_config),
-            event_exporter: Arc::new(UserEventsExporter::new(provider)),
+            event_exporter: Arc::new(UserEventsExporter::new(Arc::new(provider))),
         }
     }
 }
