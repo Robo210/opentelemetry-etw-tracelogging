@@ -69,6 +69,7 @@ impl ExporterBuilder {
     /// Log bool attributes using an InType of `xs:byte` instead of `win:Boolean`.
     /// This is non-standard and not recommended except if compatibility with the
     /// C++ ETW exporter is required.
+    /// This option has no effect for Linux user_events.
     pub fn with_byte_sized_bools(mut self) -> Self {
         self.use_byte_for_bools = true;
         self
@@ -80,6 +81,14 @@ impl ExporterBuilder {
         self
     }
 
+    /// Override the default keywords and levels for events.
+    /// Provide an implementation of the [`ExporterConfig`] trait that will
+    /// return the desired keywords and level values for each type of event.
+    /// 
+    /// By default, span start and stop events are logged with keyword 1 and
+    /// [`tracelogging::Level::Informational`].
+    /// Events attached to the span are logged with keyword 2 and [`tracelogging::Level::Verbose`].
+    /// Span Links are logged as events with keyword 4 and [`tracelogging::Level::Verbose`].
     pub fn with_exporter_config(
         mut self,
         config: impl ExporterConfig + Send + Sync + 'static,
@@ -119,7 +128,7 @@ impl ExporterBuilder {
 
     /// For advanced scenarios.
     /// Do not emit realtime events. Use this option in conjunction with
-    /// [`with_common_schema_events`] to only emit Common Schema events.
+    /// [`Self::with_common_schema_events`] to only emit Common Schema events.
     /// Recommended only for compatibility with specialized event consumers.
     /// Most ETW consumers will not benefit from Common Schema events, and may perform worse.
     pub fn without_realtime_events(mut self) -> Self {
