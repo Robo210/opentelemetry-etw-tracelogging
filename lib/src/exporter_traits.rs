@@ -14,6 +14,69 @@ pub trait ExporterConfig {
     fn get_export_span_events(&self) -> bool;
 }
 
+// A wrapper for user-provided exporter configs
+pub(crate) struct BoxedExporterConfig {
+    pub(crate) config: Box<dyn ExporterConfig + Send + Sync>,
+}
+
+impl ExporterConfig for BoxedExporterConfig {
+    fn get_span_keywords(&self) -> u64 {
+        self.config.get_span_keywords()
+    }
+
+    fn get_event_keywords(&self) -> u64 {
+        self.config.get_event_keywords()
+    }
+
+    fn get_links_keywords(&self) -> u64 {
+        self.config.get_links_keywords()
+    }
+
+    fn get_export_as_json(&self) -> bool {
+        self.config.get_export_as_json()
+    }
+
+    fn get_export_common_schema_event(&self) -> bool {
+        self.config.get_export_common_schema_event()
+    }
+
+    fn get_export_span_events(&self) -> bool {
+        self.config.get_export_span_events()
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct DefaultExporterConfig {
+    pub(crate) common_schema: bool,
+    pub(crate) etw_activities: bool,
+}
+
+impl ExporterConfig for DefaultExporterConfig {
+    fn get_span_keywords(&self) -> u64 {
+        1
+    }
+
+    fn get_event_keywords(&self) -> u64 {
+        2
+    }
+
+    fn get_links_keywords(&self) -> u64 {
+        4
+    }
+
+    fn get_export_as_json(&self) -> bool {
+        false
+    }
+
+    fn get_export_common_schema_event(&self) -> bool {
+        self.common_schema
+    }
+
+    fn get_export_span_events(&self) -> bool {
+        self.etw_activities
+    }
+}
+
 pub trait EtwSpan {
     fn get_span_data(&self) -> &opentelemetry_sdk::export::trace::SpanData;
 }

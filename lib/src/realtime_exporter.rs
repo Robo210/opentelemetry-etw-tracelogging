@@ -245,15 +245,12 @@ pub struct RealtimeTracerProvider<C: ExporterConfig, E: EventExporter> {
     event_exporter: Arc<E>,
 }
 
-#[cfg(all(target_os = "windows"))]
-impl RealtimeTracerProvider<EtwExporterConfig, EtwEventExporter> {
+#[cfg(all(target_os = "xwindows"))]
+impl<C: ExporterConfig + Send + Sync> RealtimeTracerProvider<C, EtwEventExporter> {
     pub(crate) fn new(
         provider_name: &str,
         otel_config: opentelemetry_sdk::trace::Config,
         use_byte_for_bools: bool,
-        export_payload_as_json: bool,
-        common_schema: bool,
-        etw_activities: bool,
     ) -> Self {
         let provider = Arc::pin(Provider::new(
             provider_name,
@@ -263,37 +260,30 @@ impl RealtimeTracerProvider<EtwExporterConfig, EtwEventExporter> {
             provider.as_ref().register();
         }
 
-        let exporter_config = Arc::new(EtwExporterConfig {
-            span_keywords: 1,
-            event_keywords: 2,
-            links_keywords: 4,
-            json: export_payload_as_json,
-            common_schema,
-            etw_activities,
-        });
+        let exporter_config = Arc::new(exporter_config);
 
         RealtimeTracerProvider {
             exporter_config,
             otel_config: Arc::new(otel_config),
-            event_exporter: Arc::new(EtwEventExporter::new(provider,
+            event_exporter: Arc::new(EtwEventExporter::new(
+                provider,
                 if use_byte_for_bools {
-                InType::U8
-            } else {
-                InType::Bool32
-            })),
+                    InType::U8
+                } else {
+                    InType::Bool32
+                },
+            )),
         }
     }
 }
 
-#[cfg(all(target_os = "linux"))]
-impl RealtimeTracerProvider<UserEventsExporterConfig, UserEventsExporter> {
+//#[cfg(all(target_os = "linux"))]
+impl<C: ExporterConfig + Send + Sync> RealtimeTracerProvider<C, UserEventsExporter> {
     pub(crate) fn new(
         provider_name: &str,
         otel_config: opentelemetry_sdk::trace::Config,
         _use_byte_for_bools: bool,
-        export_payload_as_json: bool,
-        common_schema: bool,
-        etw_activities: bool,
+        exporter_config: C,
     ) -> Self {
         let mut provider = linux_tld::Provider::new(
             provider_name,
@@ -309,14 +299,7 @@ impl RealtimeTracerProvider<UserEventsExporterConfig, UserEventsExporter> {
         provider.register_set(linux_tlg::Level::Error, 1);
         provider.register_set(linux_tlg::Level::Verbose, 1);
 
-        let exporter_config = Arc::new(UserEventsExporterConfig {
-            span_keywords: 1,
-            event_keywords: 2,
-            links_keywords: 4,
-            json: export_payload_as_json,
-            common_schema,
-            etw_activities,
-        });
+        let exporter_config = Arc::new(exporter_config);
 
         RealtimeTracerProvider {
             exporter_config,

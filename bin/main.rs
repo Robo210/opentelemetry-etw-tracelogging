@@ -13,7 +13,7 @@ const SAMPLE_KEY_FLOAT: Key = Key::from_static_str("float");
 fn main() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        let tracer2 = otel_etw::span_exporter::new_etw_exporter("SampleProviderName")
+        let tracer2 = otel_etw::span_exporter::new_exporter("SampleProviderName")
             .with_common_schema_events()
             .without_realtime_events()
             .with_async_runtime(EtwExporterAsyncRuntime::Tokio)

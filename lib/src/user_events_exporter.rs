@@ -53,9 +53,7 @@ impl UserEventsExporter {
     #[allow(dead_code)]
     pub(crate) fn new(provider: Arc<linux_tld::Provider>) -> UserEventsExporter {
         // Unfortunately we can't safely share a cached EventBuilder without adding undesirable locking
-        UserEventsExporter {
-            provider
-        }
+        UserEventsExporter { provider }
     }
 
     fn add_attributes_to_event(
@@ -520,8 +518,9 @@ impl EventExporter for UserEventsExporter {
             return Ok(());
         }
 
-        let span_es = if let Some(es) =
-            self.provider.find_set(Level::Informational, provider.get_span_keywords())
+        let span_es = if let Some(es) = self
+            .provider
+            .find_set(Level::Informational, provider.get_span_keywords())
         {
             es
         } else {
@@ -560,8 +559,9 @@ impl EventExporter for UserEventsExporter {
             export_payload_as_json,
         )?;
 
-        let links_es = if let Some(es) =
-            self.provider.find_set(Level::Informational, provider.get_links_keywords())
+        let links_es = if let Some(es) = self
+            .provider
+            .find_set(Level::Informational, provider.get_links_keywords())
         {
             es
         } else {
@@ -593,8 +593,9 @@ impl EventExporter for UserEventsExporter {
         //let event_keywords = provider.get_event_keywords();
         let export_payload_as_json = provider.get_export_as_json();
 
-        let span_es = if let Some(es) =
-            self.provider.find_set(Level::Informational, provider.get_span_keywords())
+        let span_es = if let Some(es) = self
+            .provider
+            .find_set(Level::Informational, provider.get_span_keywords())
         {
             es
         } else {
@@ -658,8 +659,9 @@ impl EventExporter for UserEventsExporter {
         C: ExporterConfig,
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
-        let span_es = if let Some(es) =
-            self.provider.find_set(Level::Informational, provider.get_span_keywords())
+        let span_es = if let Some(es) = self
+            .provider
+            .find_set(Level::Informational, provider.get_span_keywords())
         {
             es
         } else {
@@ -762,7 +764,8 @@ impl EventExporter for UserEventsExporter {
             Status::Unset => Level::Verbose,
         };
 
-        let span_es = if let Some(es) = self.provider.find_set(level, provider.get_span_keywords()) {
+        let span_es = if let Some(es) = self.provider.find_set(level, provider.get_span_keywords())
+        {
             es
         } else {
             return Ok(());
@@ -798,8 +801,9 @@ impl EventExporter for UserEventsExporter {
                     export_payload_as_json,
                 )
                 .and_then(|_| {
-                    let events_es = if let Some(es) =
-                        self.provider.find_set(Level::Verbose, provider.get_event_keywords())
+                    let events_es = if let Some(es) = self
+                        .provider
+                        .find_set(Level::Verbose, provider.get_event_keywords())
                     {
                         es
                     } else {
@@ -819,8 +823,9 @@ impl EventExporter for UserEventsExporter {
                     )
                 })
                 .and_then(|_| {
-                    let links_es = if let Some(es) =
-                        self.provider.find_set(Level::Verbose, provider.get_links_keywords())
+                    let links_es = if let Some(es) = self
+                        .provider
+                        .find_set(Level::Verbose, provider.get_links_keywords())
                     {
                         es
                     } else {
@@ -858,8 +863,9 @@ impl EventExporter for UserEventsExporter {
         }
 
         if provider.get_export_common_schema_event() {
-            let span_es = if let Some(es) =
-                self.provider.find_set(Level::Informational, provider.get_span_keywords())
+            let span_es = if let Some(es) = self
+                .provider
+                .find_set(Level::Informational, provider.get_span_keywords())
             {
                 es
             } else {

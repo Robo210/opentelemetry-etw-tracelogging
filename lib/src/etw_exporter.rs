@@ -19,42 +19,6 @@ use tracelogging_dynamic::*;
 
 thread_local! {static EBW: RefCell<EtwEventBuilderWrapper> = RefCell::new(EtwEventBuilderWrapper::new());}
 
-#[derive(Clone)]
-pub(crate) struct EtwExporterConfig {
-    pub(crate) span_keywords: u64,
-    pub(crate) event_keywords: u64,
-    pub(crate) links_keywords: u64,
-    pub(crate) json: bool,
-    pub(crate) common_schema: bool,
-    pub(crate) etw_activities: bool,
-}
-
-impl ExporterConfig for EtwExporterConfig {
-    fn get_span_keywords(&self) -> u64 {
-        self.span_keywords
-    }
-
-    fn get_event_keywords(&self) -> u64 {
-        self.event_keywords
-    }
-
-    fn get_links_keywords(&self) -> u64 {
-        self.links_keywords
-    }
-
-    fn get_export_as_json(&self) -> bool {
-        self.json
-    }
-
-    fn get_export_common_schema_event(&self) -> bool {
-        self.common_schema
-    }
-
-    fn get_export_span_events(&self) -> bool {
-        self.etw_activities
-    }
-}
-
 struct Win32SystemTime {
     st: [u16; 8],
 }
@@ -604,7 +568,10 @@ pub(crate) struct EtwEventExporter {
 
 impl EtwEventExporter {
     #[allow(dead_code)]
-    pub(crate) fn new(provider: Pin<Arc<Provider>>, bool_representation: InType) -> EtwEventExporter {
+    pub(crate) fn new(
+        provider: Pin<Arc<Provider>>,
+        bool_representation: InType,
+    ) -> EtwEventExporter {
         // Unfortunately we can't safely share a cached EventBuilder without adding undesirable locking
         EtwEventExporter {
             provider,

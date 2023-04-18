@@ -15,14 +15,8 @@ pub struct BatchExporter<C: ExporterConfig + Send + Sync, E: EventExporter + Sen
 }
 
 #[cfg(all(target_os = "windows"))]
-impl BatchExporter<EtwExporterConfig, EtwEventExporter> {
-    pub(crate) fn new(
-        provider_name: &str,
-        use_byte_for_bools: bool,
-        export_payload_as_json: bool,
-        common_schema: bool,
-        etw_activities: bool,
-    ) -> Self {
+impl<C: ExporterConfig + Send + Sync> BatchExporter<C, EtwEventExporter> {
+    pub(crate) fn new(provider_name: &str, use_byte_for_bools: bool, exporter_config: C) -> Self {
         let provider = Arc::pin(tracelogging_dynamic::Provider::new(
             provider_name,
             tracelogging_dynamic::Provider::options().group_id(&GROUP_ID),
@@ -31,33 +25,22 @@ impl BatchExporter<EtwExporterConfig, EtwEventExporter> {
             provider.as_ref().register();
         }
         BatchExporter {
-            config: EtwExporterConfig {
-                span_keywords: 1,
-                event_keywords: 2,
-                links_keywords: 4,
-                json: export_payload_as_json,
-                common_schema,
-                etw_activities,
-            },
-            ebw: EtwEventExporter::new(provider,
+            config: exporter_config,
+            ebw: EtwEventExporter::new(
+                provider,
                 if use_byte_for_bools {
-                tracelogging::InType::U8
-            } else {
-                tracelogging::InType::Bool32
-            }),
+                    tracelogging::InType::U8
+                } else {
+                    tracelogging::InType::Bool32
+                },
+            ),
         }
     }
 }
 
 #[cfg(all(target_os = "linux"))]
-impl BatchExporter<UserEventsExporterConfig, UserEventsExporter> {
-    pub(crate) fn new(
-        provider_name: &str,
-        _use_byte_for_bools: bool,
-        export_payload_as_json: bool,
-        common_schema: bool,
-        etw_activities: bool,
-    ) -> Self {
+impl<C: ExporterConfig + Send + Sync> BatchExporter<C, UserEventsExporter> {
+    pub(crate) fn new(provider_name: &str, _use_byte_for_bools: bool, exporter_config: C) -> Self {
         let mut provider = linux_tld::Provider::new(
             provider_name,
             linux_tld::Provider::options().group_name(GROUP_NAME),
@@ -73,14 +56,7 @@ impl BatchExporter<UserEventsExporterConfig, UserEventsExporter> {
         provider.register_set(linux_tlg::Level::Verbose, 1);
 
         let exporter = BatchExporter {
-            config: UserEventsExporterConfig {
-                span_keywords: 1,
-                event_keywords: 2,
-                links_keywords: 4,
-                json: export_payload_as_json,
-                common_schema,
-                etw_activities,
-            },
+            config: exporter_config,
             ebw: UserEventsExporter::new(Arc::new(provider)),
         };
 
@@ -114,6 +90,13 @@ mod tests {
 
     #[test]
     fn create_batch_exporter() {
-        let _ = BatchExporter::new("my_provider_name", true, true, true, true);
+        let _ = BatchExporter::new(
+            "my_provider_name",
+            true,
+            DefaultExporterConfig {
+                common_schema: true,
+                etw_activities: true,
+            },
+        );
     }
 }
