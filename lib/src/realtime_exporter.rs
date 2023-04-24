@@ -1,7 +1,7 @@
-use crate::constants::*;
 #[allow(unused_imports)]
 use crate::etw_exporter::*;
 use crate::exporter_traits::*;
+use crate::builder::ProviderGroup;
 #[allow(unused_imports)]
 use crate::user_events_exporter::*;
 use opentelemetry::InstrumentationLibrary;
@@ -245,16 +245,23 @@ pub struct RealtimeTracerProvider<C: ExporterConfig, E: EventExporter> {
     event_exporter: Arc<E>,
 }
 
-#[cfg(all(target_os = "xwindows"))]
+#[cfg(all(target_os = "windows"))]
 impl<C: ExporterConfig + Send + Sync> RealtimeTracerProvider<C, EtwEventExporter> {
     pub(crate) fn new(
         provider_name: &str,
+        provider_group: ProviderGroup,
         otel_config: opentelemetry_sdk::trace::Config,
         use_byte_for_bools: bool,
+        exporter_config: C,
     ) -> Self {
+        let mut options = Provider::options();
+        if let ProviderGroup::Windows(guid) = provider_group {
+            options = *options.group_id(&guid);
+        }
+
         let provider = Arc::pin(Provider::new(
             provider_name,
-            Provider::options().group_id(&GROUP_ID),
+            &options,
         ));
         unsafe {
             provider.as_ref().register();
@@ -277,17 +284,22 @@ impl<C: ExporterConfig + Send + Sync> RealtimeTracerProvider<C, EtwEventExporter
     }
 }
 
-//#[cfg(all(target_os = "linux"))]
+#[cfg(all(target_os = "linux"))]
 impl<C: ExporterConfig + Send + Sync> RealtimeTracerProvider<C, UserEventsExporter> {
     pub(crate) fn new(
         provider_name: &str,
+        provider_group: ProviderGroup,
         otel_config: opentelemetry_sdk::trace::Config,
         _use_byte_for_bools: bool,
         exporter_config: C,
     ) -> Self {
+        let mut options = linux_tld::Provider::options();
+        if let ProviderGroup::Linux(name) = provider_group {
+            options = *options.group_name(&name);
+        }
         let mut provider = linux_tld::Provider::new(
             provider_name,
-            linux_tld::Provider::options().group_name(GROUP_NAME),
+            &options,
         );
 
         // Standard real-time level/keyword pairs

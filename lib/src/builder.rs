@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::batch_exporter::*;
 use crate::exporter_traits::*;
 use crate::realtime_exporter::*;
@@ -21,11 +23,17 @@ pub enum EtwExporterAsyncRuntime {
     AsyncStd,
 }
 
+pub enum ProviderGroup {
+    Unset,
+    Windows(Guid),
+    Linux(Cow<'static, str>),
+}
+
 //#[derive(Debug)]
 pub struct ExporterBuilder {
     provider_name: String,
     provider_id: Guid,
-    provider_group: Option<Guid>,
+    provider_group: ProviderGroup,
     use_byte_for_bools: bool,
     json: bool,
     emit_common_schema_events: bool,
@@ -35,11 +43,14 @@ pub struct ExporterBuilder {
     exporter_config: Option<BoxedExporterConfig>,
 }
 
+/// Create an exporter builder. After configuring the builder,
+/// call [`ExporterBuilder::install`] to set it as the
+/// [global tracer provider](https://docs.rs/opentelemetry_api/latest/opentelemetry_api/global/index.html).
 pub fn new_exporter(name: &str) -> ExporterBuilder {
     ExporterBuilder {
         provider_name: name.to_owned(),
         provider_id: Guid::from_name(name),
-        provider_group: None,
+        provider_group: ProviderGroup::Unset,
         use_byte_for_bools: false,
         json: false,
         emit_common_schema_events: false,
@@ -138,8 +149,15 @@ impl ExporterBuilder {
 
     /// For advanced scenarios.
     /// Set the ETW provider group to join this provider to.
+    #[cfg(all(target_os = "windows"))]
     pub fn with_provider_group(mut self, group_id: Guid) -> Self {
-        self.provider_group = Some(group_id);
+        self.provider_group = ProviderGroup::Windows(group_id);
+        self
+    }
+
+    #[cfg(all(target_os = "linux"))]
+    pub fn with_provider_group(mut self, name: &str) -> Self {
+        self.provider_group = ProviderGroup::Linux(Cow::Borrowed(name).to_owned());
         self
     }
 
@@ -163,13 +181,29 @@ impl ExporterBuilder {
         }
 
         #[allow(unreachable_patterns)]
-        match &self.runtime {
+        match self.runtime.as_ref() {
             None => (),
             Some(x) => match x {
                 #[cfg(any(feature = "rt-tokio"))]
                 EtwExporterAsyncRuntime::Tokio => (),
                 _ => todo!(),
             },
+        }
+
+        match &self.provider_group {
+            ProviderGroup::Unset => (),
+            ProviderGroup::Windows(guid) => {
+                assert_ne!(guid, &Guid::zero(), "Provider GUID must not be zeroes");
+            },
+            ProviderGroup::Linux(name) => {
+                assert!(linux_tld::ProviderOptions::is_valid_option_value(&name), "Provider names must be lower case ASCII or numeric digits");
+            }
+        }
+
+        #[cfg(all(target_os = "linux"))]
+        if self.provider_name.contains(|f: char| {!f.is_ascii_alphanumeric()}) {
+            // The perf command is very particular about the provider names it accepts
+            panic!("Linux provider names must be ASCII alphanumeric");
         }
     }
 
@@ -193,6 +227,7 @@ impl ExporterBuilder {
                             opentelemetry_sdk::trace::TracerProvider::builder()
                                 .with_simple_exporter(BatchExporter::new(
                                     &self.provider_name,
+                                    self.provider_group,
                                     self.use_byte_for_bools,
                                     exporter_config,
                                 ))
@@ -200,6 +235,7 @@ impl ExporterBuilder {
                         None => opentelemetry_sdk::trace::TracerProvider::builder()
                             .with_simple_exporter(BatchExporter::new(
                                 &self.provider_name,
+                                self.provider_group,
                                 self.use_byte_for_bools,
                                 DefaultExporterConfig {
                                     common_schema: self.emit_common_schema_events,
@@ -225,9 +261,7 @@ impl ExporterBuilder {
                         #[cfg(any(feature = "rt-tokio"))]
                         EtwExporterAsyncRuntime::Tokio => opentelemetry_sdk::runtime::Tokio,
                         #[cfg(any(feature = "rt-tokio-current-thread"))]
-                        EtwExporterAsyncRuntime::TokioCurrentThread => {
-                            opentelemetry_sdk::runtime::TokioCurrentThread
-                        }
+                        EtwExporterAsyncRuntime::TokioCurrentThread => opentelemetry_sdk::runtime::TokioCurrentThread,
                         #[cfg(any(feature = "rt-async-std"))]
                         EtwExporterAsyncRuntime::AsyncStd => opentelemetry_sdk::runtime::AsyncStd,
                     };
@@ -237,6 +271,7 @@ impl ExporterBuilder {
                             opentelemetry_sdk::trace::TracerProvider::builder().with_batch_exporter(
                                 BatchExporter::new(
                                     &self.provider_name,
+                                    self.provider_group,
                                     self.use_byte_for_bools,
                                     exporter_config,
                                 ),
@@ -247,6 +282,7 @@ impl ExporterBuilder {
                             .with_batch_exporter(
                                 BatchExporter::new(
                                     &self.provider_name,
+                                    self.provider_group,
                                     self.use_byte_for_bools,
                                     DefaultExporterConfig {
                                         common_schema: self.emit_common_schema_events,
@@ -284,6 +320,7 @@ impl ExporterBuilder {
                 Some(exporter_config) => {
                     let provider = RealtimeTracerProvider::new(
                         &self.provider_name,
+                        self.provider_group,
                         otel_config,
                         self.use_byte_for_bools,
                         exporter_config,
@@ -294,6 +331,7 @@ impl ExporterBuilder {
                 None => {
                     let provider = RealtimeTracerProvider::new(
                         &self.provider_name,
+                        self.provider_group,
                         otel_config,
                         self.use_byte_for_bools,
                         DefaultExporterConfig {

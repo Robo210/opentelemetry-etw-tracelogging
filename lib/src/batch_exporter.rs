@@ -1,4 +1,4 @@
-use crate::constants::*;
+use crate::builder::ProviderGroup;
 #[allow(unused_imports)]
 use crate::etw_exporter::*;
 use crate::exporter_traits::*;
@@ -16,10 +16,15 @@ pub struct BatchExporter<C: ExporterConfig + Send + Sync, E: EventExporter + Sen
 
 #[cfg(all(target_os = "windows"))]
 impl<C: ExporterConfig + Send + Sync> BatchExporter<C, EtwEventExporter> {
-    pub(crate) fn new(provider_name: &str, use_byte_for_bools: bool, exporter_config: C) -> Self {
+    pub(crate) fn new(provider_name: &str, provider_group: ProviderGroup, use_byte_for_bools: bool, exporter_config: C) -> Self {
+        let mut options = tracelogging_dynamic::Provider::options();
+        if let ProviderGroup::Windows(guid) = provider_group {
+            options = *options.group_id(&guid);
+        }
+
         let provider = Arc::pin(tracelogging_dynamic::Provider::new(
             provider_name,
-            tracelogging_dynamic::Provider::options().group_id(&GROUP_ID),
+            &options,
         ));
         unsafe {
             provider.as_ref().register();
@@ -40,10 +45,14 @@ impl<C: ExporterConfig + Send + Sync> BatchExporter<C, EtwEventExporter> {
 
 #[cfg(all(target_os = "linux"))]
 impl<C: ExporterConfig + Send + Sync> BatchExporter<C, UserEventsExporter> {
-    pub(crate) fn new(provider_name: &str, _use_byte_for_bools: bool, exporter_config: C) -> Self {
+    pub(crate) fn new(provider_name: &str, provider_group: ProviderGroup, _use_byte_for_bools: bool, exporter_config: C) -> Self {
+        let mut options = linux_tld::Provider::options();
+        if let ProviderGroup::Linux(name) = provider_group {
+            options = *options.group_name(&name);
+        }
         let mut provider = linux_tld::Provider::new(
             provider_name,
-            linux_tld::Provider::options().group_name(GROUP_NAME),
+            &options,
         );
 
         // Standard real-time level/keyword pairs
@@ -92,6 +101,7 @@ mod tests {
     fn create_batch_exporter() {
         let _ = BatchExporter::new(
             "my_provider_name",
+            ProviderGroup::Unset,
             true,
             DefaultExporterConfig {
                 common_schema: true,
