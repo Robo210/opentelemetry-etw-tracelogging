@@ -9,10 +9,10 @@ mod exporter_traits;
 #[path = "../src/json.rs"]
 mod json;
 
-use etw_helpers::*;
 use crate::exporter_traits::*;
 use criterion::{criterion_group, criterion_main, Criterion};
 use etw_exporter::EtwEventExporter;
+use etw_helpers::*;
 use opentelemetry::trace::{SpanContext, SpanId, SpanKind, TraceFlags, TraceState};
 use opentelemetry::InstrumentationLibrary;
 use opentelemetry_sdk::{

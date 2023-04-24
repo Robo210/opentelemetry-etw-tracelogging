@@ -11,12 +11,12 @@ mod functional {
         trace::{Link, Span, SpanContext, TraceContextExt, Tracer},
         Key,
     };
+    use rsevents::Awaitable;
     use tracelogging::{self, Guid, Level};
     use windows::{
         core::{GUID, PCSTR},
         s,
     };
-    use rsevents::Awaitable;
 
     const SAMPLE_KEY_STR: Key = Key::from_static_str("str");
     const SAMPLE_KEY_BOOL: Key = Key::from_static_str("bool");
@@ -58,9 +58,12 @@ mod functional {
     #[test]
     #[cfg(target_os = "windows")]
     fn log_common_schema_events() -> Result<(), windows::core::Error> {
-
         unsafe {
-            TEST_PROVIDER.register_with_callback(provider_enabled_callback, &log_common_schema_events_enabled_event as *const rsevents::ManualResetEvent as usize);
+            TEST_PROVIDER.register_with_callback(
+                provider_enabled_callback,
+                &log_common_schema_events_enabled_event as *const rsevents::ManualResetEvent
+                    as usize,
+            );
         }
 
         let span_context: SpanContext = SpanContext::empty_context();

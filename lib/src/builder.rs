@@ -84,7 +84,7 @@ impl ExporterBuilder {
     /// Override the default keywords and levels for events.
     /// Provide an implementation of the [`ExporterConfig`] trait that will
     /// return the desired keywords and level values for each type of event.
-    /// 
+    ///
     /// By default, span start and stop events are logged with keyword 1 and
     /// [`tracelogging::Level::Informational`].
     /// Events attached to the span are logged with keyword 2 and [`tracelogging::Level::Verbose`].
@@ -268,7 +268,7 @@ impl ExporterBuilder {
                     feature = "rt-tokio-current-thread",
                     feature = "rt-async-std"
                 )))]
-                Some(_) => todo!()
+                Some(_) => todo!(),
             };
 
             let provider = provider_builder.build();

@@ -6,7 +6,7 @@
 //! Windows ETW events or Linux user-mode tracepoints (user_events; requires a Linux 6.4+
 //! kernel) events with TraceLogging-like encoding.
 //! *Note*: Linux kernels without user_events support will not log any events.
-//! 
+//!
 //! ### ETW
 //!
 //! ETW is a Windows-specific system wide, high performance, lossy tracing API built into the
@@ -24,12 +24,12 @@
 //! with ETW and trace processing tools such as WPA, PerfView, or TraceView.
 //! - <https://learn.microsoft.com/windows/win32/etw/about-event-tracing>
 //! - <https://learn.microsoft.com/windows-hardware/test/weg/instrumenting-your-code-with-etw>
-//! 
+//!
 //! This Span exporter uses [TraceLogging](https://learn.microsoft.com/windows/win32/tracelogging/trace-logging-about)
 //! to log events. The ETW provider ID is generated from a hash of the specified provider name.
-//! 
+//!
 //! ### Linux user_events
-//! 
+//!
 //! User-mode event tracing [(user_events)](https://docs.kernel.org/trace/user_events.html)
 //! is new to the Linux kernel starting with version 6.4. For the purposes of this exporter,
 //! its functionality is nearly identical to ETW. Any differences between the two will be explicitly
@@ -133,6 +133,6 @@ pub mod span_exporter {
     pub use crate::builder::*;
     pub use crate::constants::*;
     pub use crate::error::*;
-    pub use crate::realtime_exporter::*;
     pub use crate::exporter_traits::*;
+    pub use crate::realtime_exporter::*;
 }
