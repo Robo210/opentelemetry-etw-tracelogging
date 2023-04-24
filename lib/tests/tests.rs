@@ -1,9 +1,9 @@
-mod etw_helpers;
-
 #[cfg(test)]
 #[allow(dead_code, non_upper_case_globals)]
 mod functional {
-    use crate::etw_helpers::*;
+    use std::ffi::c_void;
+
+    use etw_helpers::*;
     use futures::future::Either;
     use futures::*;
     use opentelemetry::{
@@ -11,11 +11,12 @@ mod functional {
         trace::{Link, Span, SpanContext, TraceContextExt, Tracer},
         Key,
     };
-    use tracelogging;
+    use tracelogging::{self, Guid, Level};
     use windows::{
         core::{GUID, PCSTR},
         s,
     };
+    use rsevents::Awaitable;
 
     const SAMPLE_KEY_STR: Key = Key::from_static_str("str");
     const SAMPLE_KEY_BOOL: Key = Key::from_static_str("bool");
@@ -29,15 +30,39 @@ mod functional {
     const test_provider_id: windows::core::GUID =
         GUID::from_u128(161089410211316030591454656377708900636u128);
 
-    // //////////////
+    // We don't log events from this, but we need to register it and get an enabled callback for it
+    // so we don't start logging events before the test has enabled the provider.
     tracelogging::define_provider!(
         TEST_PROVIDER,
         "OpenTelemetry-Rust-ETW-Exporter-Test-Provider"
     );
 
+    fn provider_enabled_callback(
+        _source_id: &Guid,
+        _event_control_code: u32,
+        _level: Level,
+        _match_any_keyword: u64,
+        _match_all_keyword: u64,
+        _filter_data: usize,
+        callback_context: usize,
+    ) {
+        unsafe {
+            let ctx = &*(callback_context as *const c_void as *const rsevents::ManualResetEvent);
+            ctx.set();
+        }
+    }
+
+    static log_common_schema_events_enabled_event: rsevents::ManualResetEvent =
+        rsevents::ManualResetEvent::new(rsevents::EventState::Unset);
+
     #[test]
     #[cfg(target_os = "windows")]
     fn log_common_schema_events() -> Result<(), windows::core::Error> {
+
+        unsafe {
+            TEST_PROVIDER.register_with_callback(provider_enabled_callback, &log_common_schema_events_enabled_event as *const rsevents::ManualResetEvent as usize);
+        }
+
         let span_context: SpanContext = SpanContext::empty_context();
 
         let tracer = opentelemetry_etw::span_exporter::new_exporter(test_provider_name)
@@ -48,10 +73,12 @@ mod functional {
         let h = EtwSession::get_or_start_etw_session(sz_test_session_name, false)?;
         h.enable_provider(&test_provider_id)?;
 
-        let mut consumer = EtwEventConsumer2::new();
+        let mut consumer = EtwEventAsyncWaiter::new();
         let event_consumer = consumer.get_consumer();
 
-        let trace = ProcessTraceHandle::from_session(sz_test_session_name, &event_consumer)?;
+        let trace = ProcessTraceHandle::from_session(sz_test_session_name, event_consumer)?;
+
+        log_common_schema_events_enabled_event.wait();
 
         // Logging events needs to be delayed enough from the call to enable_provider for the enable callback to arrive
 
@@ -89,7 +116,7 @@ mod functional {
 
         // Check the ETW events that were collected
 
-        let fut = consumer.expect_event(|evt| {
+        let fut = consumer.expect_event_async(|evt| {
             if evt.EventHeader.ProviderId == test_provider_id {
                 println!(
                     "Found event from provider! {}",
@@ -101,7 +128,7 @@ mod functional {
                 false
             }
         });
-        let fut2 = consumer.expect_event(|evt| {
+        let fut2 = consumer.expect_event_async(|evt| {
             if evt.EventHeader.ProviderId == test_provider_id {
                 println!(
                     "Found event from provider! {}",
@@ -117,7 +144,7 @@ mod functional {
         // Create a future that will either time out (success) or pick up another event (failure).
         // We only expect 2 ETW events at this point, so a 3rd event showing up is a problem.
         // This will need to be adjusted when Span Events are turned into ETW Events.
-        let fut3 = consumer.expect_event(|_evt| {
+        let fut3 = consumer.expect_event_async(|_evt| {
             assert!(false, "Found unexpected third event");
             false
         });

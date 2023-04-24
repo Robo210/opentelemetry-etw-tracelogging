@@ -620,36 +620,38 @@ impl EventExporter for EtwEventExporter {
             &span_context.trace_id(),
         );
 
-        let mut ebw = EtwEventBuilderWrapper::new();
+        EBW.with(|ebw| {
+            let mut ebw = ebw.borrow_mut();
 
-        ebw.write_span_event(
-            &self.provider.as_ref(),
-            &span_data.name,
-            Level::Informational,
-            span_keywords,
-            &activities,
-            &span_data.start_time,
-            Some(&span_data.span_kind),
-            &Status::Unset,
-            &mut std::iter::empty(),
-            true,
-            false,
-            use_byte_for_bools,
-            export_payload_as_json,
-        )?;
+            ebw.write_span_event(
+                &self.provider.as_ref(),
+                &span_data.name,
+                Level::Informational,
+                span_keywords,
+                &activities,
+                &span_data.start_time,
+                Some(&span_data.span_kind),
+                &Status::Unset,
+                &mut std::iter::empty(),
+                true,
+                false,
+                use_byte_for_bools,
+                export_payload_as_json,
+            )?;
 
-        ebw.write_span_links(
-            &self.provider.as_ref(),
-            Level::Verbose,
-            links_keywords,
-            &activities,
-            &span_data.name,
-            &span_data.start_time,
-            &mut span_data.links.iter(),
-            use_byte_for_bools,
-        )?;
+            ebw.write_span_links(
+                &self.provider.as_ref(),
+                Level::Verbose,
+                links_keywords,
+                &activities,
+                &span_data.name,
+                &span_data.start_time,
+                &mut span_data.links.iter(),
+                use_byte_for_bools,
+            )?;
 
-        Ok(())
+            Ok(())
+        })
     }
 
     // Called by the real-time exporter when a span is ended
@@ -669,51 +671,53 @@ impl EventExporter for EtwEventExporter {
 
         let span_data = span.get_span_data();
 
-        let mut ebw = EtwEventBuilderWrapper::new();
+        EBW.with(|ebw| {
+            let mut ebw = ebw.borrow_mut();
 
-        if self.provider.enabled(Level::Informational, span_keywords)
-            && provider.get_export_span_events()
-        {
-            let activities = Activities::generate(
-                &span_data.span_context.span_id(),
-                &span_data.parent_span_id,
-                &span_data.span_context.trace_id(),
-            );
+            if self.provider.enabled(Level::Informational, span_keywords)
+                && provider.get_export_span_events()
+            {
+                let activities = Activities::generate(
+                    &span_data.span_context.span_id(),
+                    &span_data.parent_span_id,
+                    &span_data.span_context.trace_id(),
+                );
 
-            ebw.write_span_event(
-                &self.provider.as_ref(),
-                &span_data.name,
-                Level::Informational,
-                span_keywords,
-                &activities,
-                &span_data.end_time,
-                Some(&span_data.span_kind),
-                &span_data.status,
-                &mut span_data.attributes.iter(),
-                false,
-                false,
-                use_byte_for_bools,
-                export_payload_as_json,
-            )?;
-        }
+                ebw.write_span_event(
+                    &self.provider.as_ref(),
+                    &span_data.name,
+                    Level::Informational,
+                    span_keywords,
+                    &activities,
+                    &span_data.end_time,
+                    Some(&span_data.span_kind),
+                    &span_data.status,
+                    &mut span_data.attributes.iter(),
+                    false,
+                    false,
+                    use_byte_for_bools,
+                    export_payload_as_json,
+                )?;
+            }
 
-        if self.provider.enabled(Level::Informational, span_keywords)
-            && provider.get_export_common_schema_event()
-        {
-            let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
-            ebw.write_common_schema_span(
-                &self.provider.as_ref(),
-                &span_data.name,
-                Level::Informational,
-                span_keywords,
-                span_data,
-                span.span_context(),
-                export_payload_as_json,
-                attributes,
-            )?;
-        }
+            if self.provider.enabled(Level::Informational, span_keywords)
+                && provider.get_export_common_schema_event()
+            {
+                let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
+                ebw.write_common_schema_span(
+                    &self.provider.as_ref(),
+                    &span_data.name,
+                    Level::Informational,
+                    span_keywords,
+                    span_data,
+                    span.span_context(),
+                    export_payload_as_json,
+                    attributes,
+                )?;
+            }
 
-        Ok(())
+            Ok(())
+        })
     }
 
     // Called by the real-time exporter when an event is added to a span
@@ -750,65 +754,67 @@ impl EventExporter for EtwEventExporter {
             &span_data.span_context.trace_id(),
         );
 
-        let mut ebw = EtwEventBuilderWrapper::new();
+        EBW.with(|ebw| {
+            let mut ebw = ebw.borrow_mut();
 
-        ebw.reset(
-            &event.name,
-            Level::Verbose,
-            event_keywords,
-            EVENT_TAG_IGNORE_EVENT_TIME,
-        );
-        ebw.opcode(Opcode::Info);
-
-        ebw.add_filetime(
-            "otel_event_time",
-            win_filetime_from_systemtime!(event.timestamp),
-            OutType::DateTimeUtc,
-            FIELD_TAG_IS_REAL_EVENT_TIME,
-        );
-        ebw.add_win32_systemtime("time", &event.timestamp.into(), 0);
-
-        ebw.add_str8("SpanId", &activities.span_id, OutType::Utf8, 0);
-
-        if !activities.parent_span_id.is_empty() {
-            ebw.add_str8("ParentId", &activities.parent_span_id, OutType::Utf8, 0);
-        }
-
-        ebw.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
-
-        let mut added = false;
-
-        #[cfg(feature = "json")]
-        if export_payload_as_json {
-            let json_string = json::get_attributes_as_json(
-                &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+            ebw.reset(
+                &event.name,
+                Level::Verbose,
+                event_keywords,
+                EVENT_TAG_IGNORE_EVENT_TIME,
             );
-            ebw.add_str8("Payload", &json_string, OutType::Json, 0);
-            added = true;
-        }
+            ebw.opcode(Opcode::Info);
 
-        if !added {
-            ebw.add_attributes_to_event(
-                &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
-                use_byte_for_bools,
+            ebw.add_filetime(
+                "otel_event_time",
+                win_filetime_from_systemtime!(event.timestamp),
+                OutType::DateTimeUtc,
+                FIELD_TAG_IS_REAL_EVENT_TIME,
             );
-        }
+            ebw.add_win32_systemtime("time", &event.timestamp.into(), 0);
 
-        let win32err = ebw.write(
-            &self.provider,
-            Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
-            activities
-                .parent_activity_id
-                .as_ref()
-                .and_then(|g| Some(Guid::from_bytes_be(g)))
-                .as_ref(),
-        );
+            ebw.add_str8("SpanId", &activities.span_id, OutType::Utf8, 0);
 
-        if win32err != 0 {
-            return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
-        }
+            if !activities.parent_span_id.is_empty() {
+                ebw.add_str8("ParentId", &activities.parent_span_id, OutType::Utf8, 0);
+            }
 
-        Ok(())
+            ebw.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
+
+            let mut added = false;
+
+            #[cfg(feature = "json")]
+            if export_payload_as_json {
+                let json_string = json::get_attributes_as_json(
+                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                );
+                ebw.add_str8("Payload", &json_string, OutType::Json, 0);
+                added = true;
+            }
+
+            if !added {
+                ebw.add_attributes_to_event(
+                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                    use_byte_for_bools,
+                );
+            }
+
+            let win32err = ebw.write(
+                &self.provider,
+                Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
+                activities
+                    .parent_activity_id
+                    .as_ref()
+                    .and_then(|g| Some(Guid::from_bytes_be(g)))
+                    .as_ref(),
+            );
+
+            if win32err != 0 {
+                Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })))
+            } else {
+                Ok(())
+            }
+        })
     }
 
     // Called by the batch exporter sometime after span is completed

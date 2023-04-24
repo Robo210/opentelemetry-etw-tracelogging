@@ -166,6 +166,7 @@ impl ExporterBuilder {
         match &self.runtime {
             None => (),
             Some(x) => match x {
+                #[cfg(any(feature = "rt-tokio"))]
                 EtwExporterAsyncRuntime::Tokio => (),
                 _ => todo!(),
             },
@@ -213,6 +214,11 @@ impl ExporterBuilder {
                         provider_builder
                     }
                 }
+                #[cfg(any(
+                    feature = "rt-tokio",
+                    feature = "rt-tokio-current-thread",
+                    feature = "rt-async-std"
+                ))]
                 Some(runtime) => {
                     // If multiple runtimes are enabled this won't compile due to mismatched arms in the match
                     let runtime = match runtime {
@@ -257,6 +263,12 @@ impl ExporterBuilder {
                         provider_builder
                     }
                 }
+                #[cfg(not(any(
+                    feature = "rt-tokio",
+                    feature = "rt-tokio-current-thread",
+                    feature = "rt-async-std"
+                )))]
+                Some(_) => todo!()
             };
 
             let provider = provider_builder.build();

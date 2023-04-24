@@ -4,14 +4,12 @@ mod constants;
 mod error;
 #[path = "../src/etw_exporter.rs"]
 mod etw_exporter;
-#[path = "../tests/etw_helpers.rs"]
-mod etw_helpers;
 #[path = "../src/exporter_traits.rs"]
 mod exporter_traits;
 #[path = "../src/json.rs"]
 mod json;
 
-use crate::etw_helpers::*;
+use etw_helpers::*;
 use crate::exporter_traits::*;
 use criterion::{criterion_group, criterion_main, Criterion};
 use etw_exporter::EtwEventExporter;
