@@ -120,10 +120,11 @@ mod functional {
         // Check the ETW events that were collected
 
         let fut = consumer.expect_event_async(|evt| {
-            if evt.EventHeader.ProviderId == test_provider_id {
+            let event_header = evt.get_event_header();
+            if event_header.ProviderId == test_provider_id {
                 println!(
                     "Found event from provider! {}",
-                    evt.EventHeader.EventDescriptor.Keyword
+                    event_header.EventDescriptor.Keyword
                 );
                 // TODO: Actually verify the event contents
                 true
@@ -132,10 +133,11 @@ mod functional {
             }
         });
         let fut2 = consumer.expect_event_async(|evt| {
-            if evt.EventHeader.ProviderId == test_provider_id {
+            let event_header = evt.get_event_header();
+            if event_header.ProviderId == test_provider_id {
                 println!(
                     "Found event from provider! {}",
-                    evt.EventHeader.EventDescriptor.Keyword
+                    event_header.EventDescriptor.Keyword
                 );
                 // TODO: Actually verify the event contents
                 true

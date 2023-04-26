@@ -5,9 +5,11 @@ use opentelemetry::{
     Array, Key, Value,
 };
 use opentelemetry_sdk::export::trace::{ExportResult, SpanData};
-use std::{sync::Arc, time::SystemTime};
+use std::{sync::Arc, time::SystemTime, cell::RefCell};
 
 use crate::{exporter_traits::*, json, span_exporter::*};
+
+thread_local! {static EBW: RefCell<EventBuilder> = RefCell::new(EventBuilder::new());}
 
 #[derive(Clone)]
 pub(crate) struct UserEventsExporterConfig {
@@ -543,45 +545,45 @@ impl EventExporter for UserEventsExporter {
             &span_context.trace_id(),
         );
 
-        let mut eb = EventBuilder::new();
+        EBW.with(|eb| {
+            let mut eb = eb.borrow_mut();
 
-        self.write_span_event(
-            &span_es,
-            &mut eb,
-            &span_data.name,
-            &activities,
-            &span_data.start_time,
-            Some(&span_data.span_kind),
-            &Status::Unset,
-            &mut std::iter::empty(),
-            true,
-            false,
-            export_payload_as_json,
-        )?;
+            self.write_span_event(
+                &span_es,
+                &mut eb,
+                &span_data.name,
+                &activities,
+                &span_data.start_time,
+                Some(&span_data.span_kind),
+                &Status::Unset,
+                &mut std::iter::empty(),
+                true,
+                false,
+                export_payload_as_json,
+            )?;
 
-        let links_es = if let Some(es) = self
-            .provider
-            .find_set(Level::Informational, provider.get_links_keywords())
-        {
-            es
-        } else {
-            return Ok(());
-        };
+            let links_es = if let Some(es) = self
+                .provider
+                .find_set(Level::Informational, provider.get_links_keywords())
+            {
+                es
+            } else {
+                return Ok(());
+            };
 
-        if !span_es.enabled() {
-            return Ok(());
-        }
+            if !span_es.enabled() {
+                return Ok(());
+            }
 
-        self.write_span_links(
-            &links_es,
-            &mut eb,
-            &activities,
-            &span_data.name,
-            &span_data.start_time,
-            &mut span_data.links.iter(),
-        )?;
-
-        Ok(())
+            self.write_span_links(
+                &links_es,
+                &mut eb,
+                &activities,
+                &span_data.name,
+                &span_data.start_time,
+                &mut span_data.links.iter(),
+            )
+        })
     }
 
     // Called by the real-time exporter when a span is ended
@@ -608,44 +610,46 @@ impl EventExporter for UserEventsExporter {
 
         let span_data = span.get_span_data();
 
-        let mut eb = EventBuilder::new();
+        EBW.with(|eb| {
+            let mut eb = eb.borrow_mut();
 
-        if provider.get_export_span_events() {
-            let activities = Activities::generate(
-                &span_data.span_context.span_id(),
-                &span_data.parent_span_id,
-                &span_data.span_context.trace_id(),
-            );
+            if provider.get_export_span_events() {
+                let activities = Activities::generate(
+                    &span_data.span_context.span_id(),
+                    &span_data.parent_span_id,
+                    &span_data.span_context.trace_id(),
+                );
 
-            self.write_span_event(
-                &span_es,
-                &mut eb,
-                &span_data.name,
-                &activities,
-                &span_data.end_time,
-                Some(&span_data.span_kind),
-                &span_data.status,
-                &mut span_data.attributes.iter(),
-                false,
-                false,
-                export_payload_as_json,
-            )?;
-        }
+                self.write_span_event(
+                    &span_es,
+                    &mut eb,
+                    &span_data.name,
+                    &activities,
+                    &span_data.end_time,
+                    Some(&span_data.span_kind),
+                    &span_data.status,
+                    &mut span_data.attributes.iter(),
+                    false,
+                    false,
+                    export_payload_as_json,
+                )?;
+            }
 
-        if provider.get_export_common_schema_event() {
-            let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
-            self.write_common_schema_span(
-                &span_es,
-                &mut eb,
-                &span_data.name,
-                span_data,
-                span.span_context(),
-                export_payload_as_json,
-                attributes,
-            )?;
-        }
+            if provider.get_export_common_schema_event() {
+                let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
+                self.write_common_schema_span(
+                    &span_es,
+                    &mut eb,
+                    &span_data.name,
+                    span_data,
+                    span.span_context(),
+                    export_payload_as_json,
+                    attributes,
+                )?;
+            }
 
-        Ok(())
+            Ok(())
+        })
     }
 
     // Called by the real-time exporter when an event is added to a span
@@ -686,69 +690,71 @@ impl EventExporter for UserEventsExporter {
             &span_data.span_context.trace_id(),
         );
 
-        let mut eb = EventBuilder::new();
+        EBW.with(|eb| {
+            let mut eb = eb.borrow_mut();
 
-        eb.reset(&event.name, EVENT_TAG_IGNORE_EVENT_TIME as u16);
-        eb.opcode(Opcode::Info);
+            eb.reset(&event.name, EVENT_TAG_IGNORE_EVENT_TIME as u16);
+            eb.opcode(Opcode::Info);
 
-        eb.add_value(
-            "time",
-            event
-                .timestamp
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            FieldFormat::Time,
-            FIELD_TAG_IS_REAL_EVENT_TIME as u16,
-        );
+            eb.add_value(
+                "time",
+                event
+                    .timestamp
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+                FieldFormat::Time,
+                FIELD_TAG_IS_REAL_EVENT_TIME as u16,
+            );
 
-        eb.add_str("SpanId", &activities.span_id, FieldFormat::Default, 0);
+            eb.add_str("SpanId", &activities.span_id, FieldFormat::Default, 0);
 
-        if !activities.parent_span_id.is_empty() {
+            if !activities.parent_span_id.is_empty() {
+                eb.add_str(
+                    "ParentId",
+                    &activities.parent_span_id,
+                    FieldFormat::Default,
+                    0,
+                );
+            }
+
             eb.add_str(
-                "ParentId",
-                &activities.parent_span_id,
+                "TraceId",
+                &activities.trace_id_name,
                 FieldFormat::Default,
                 0,
             );
-        }
 
-        eb.add_str(
-            "TraceId",
-            &activities.trace_id_name,
-            FieldFormat::Default,
-            0,
-        );
+            let mut added = false;
 
-        let mut added = false;
+            #[cfg(feature = "json")]
+            if export_payload_as_json {
+                let json_string = json::get_attributes_as_json(
+                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                );
+                eb.add_str("Payload", &json_string, FieldFormat::StringJson, 0);
+                added = true;
+            }
 
-        #[cfg(feature = "json")]
-        if export_payload_as_json {
-            let json_string = json::get_attributes_as_json(
-                &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+            if !added {
+                self.add_attributes_to_event(
+                    &mut eb,
+                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                );
+            }
+
+            let err = eb.write(
+                &span_es,
+                Some(&activities.activity_id),
+                activities.parent_activity_id.as_ref(),
             );
-            eb.add_str("Payload", &json_string, FieldFormat::StringJson, 0);
-            added = true;
-        }
 
-        if !added {
-            self.add_attributes_to_event(
-                &mut eb,
-                &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
-            );
-        }
+            if err != 0 {
+                return Err(TraceError::ExportFailed(Box::new(LinuxError { err })));
+            }
 
-        let err = eb.write(
-            &span_es,
-            Some(&activities.activity_id),
-            activities.parent_activity_id.as_ref(),
-        );
-
-        if err != 0 {
-            return Err(TraceError::ExportFailed(Box::new(LinuxError { err })));
-        }
-
-        Ok(())
+            Ok(())
+        })
     }
 
     // Called by the batch exporter sometime after span is completed
@@ -775,120 +781,121 @@ impl EventExporter for UserEventsExporter {
             return Ok(());
         }
 
-        // TODO: We should be caching this and reusing it for the entire batch export
-        let mut eb = EventBuilder::new();
+        EBW.with(|eb| {
+            let mut eb = eb.borrow_mut();
+            let mut err = Ok(());
 
-        let mut err = Ok(());
-        if provider.get_export_span_events() {
-            let activities = Activities::generate(
-                &span_data.span_context.span_id(),
-                &span_data.parent_span_id,
-                &span_data.span_context.trace_id(),
-            );
+            if provider.get_export_span_events() {
+                let activities = Activities::generate(
+                    &span_data.span_context.span_id(),
+                    &span_data.parent_span_id,
+                    &span_data.span_context.trace_id(),
+                );
 
-            err = self
-                .write_span_event(
-                    &span_es,
-                    &mut eb,
-                    &span_data.name,
-                    &activities,
-                    &span_data.start_time,
-                    Some(&span_data.span_kind),
-                    &span_data.status,
-                    &mut std::iter::empty(),
-                    true,
-                    true,
-                    export_payload_as_json,
-                )
-                .and_then(|_| {
-                    let events_es = if let Some(es) = self
-                        .provider
-                        .find_set(Level::Verbose, provider.get_event_keywords())
-                    {
-                        es
-                    } else {
-                        return Ok(());
-                    };
-
-                    if !events_es.enabled() {
-                        return Ok(());
-                    }
-
-                    self.write_span_events(
-                        &events_es,
-                        &mut eb,
-                        &activities,
-                        &mut span_data.events.iter(),
-                        export_payload_as_json,
-                    )
-                })
-                .and_then(|_| {
-                    let links_es = if let Some(es) = self
-                        .provider
-                        .find_set(Level::Verbose, provider.get_links_keywords())
-                    {
-                        es
-                    } else {
-                        return Ok(());
-                    };
-
-                    if !links_es.enabled() {
-                        return Ok(());
-                    }
-
-                    self.write_span_links(
-                        &links_es,
-                        &mut eb,
-                        &activities,
-                        &span_data.name,
-                        &span_data.start_time,
-                        &mut span_data.links.iter(),
-                    )
-                })
-                .and_then(|_| {
-                    self.write_span_event(
+                err = self
+                    .write_span_event(
                         &span_es,
                         &mut eb,
                         &span_data.name,
                         &activities,
-                        &span_data.end_time,
+                        &span_data.start_time,
                         Some(&span_data.span_kind),
                         &span_data.status,
-                        &mut span_data.attributes.iter(),
-                        false,
+                        &mut std::iter::empty(),
+                        true,
                         true,
                         export_payload_as_json,
                     )
-                });
-        }
+                    .and_then(|_| {
+                        let events_es = if let Some(es) = self
+                            .provider
+                            .find_set(Level::Verbose, provider.get_event_keywords())
+                        {
+                            es
+                        } else {
+                            return Ok(());
+                        };
 
-        if provider.get_export_common_schema_event() {
-            let span_es = if let Some(es) = self
-                .provider
-                .find_set(Level::Informational, provider.get_span_keywords())
-            {
-                es
-            } else {
-                return Ok(());
-            };
+                        if !events_es.enabled() {
+                            return Ok(());
+                        }
 
-            if span_es.enabled() {
-                let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
+                        self.write_span_events(
+                            &events_es,
+                            &mut eb,
+                            &activities,
+                            &mut span_data.events.iter(),
+                            export_payload_as_json,
+                        )
+                    })
+                    .and_then(|_| {
+                        let links_es = if let Some(es) = self
+                            .provider
+                            .find_set(Level::Verbose, provider.get_links_keywords())
+                        {
+                            es
+                        } else {
+                            return Ok(());
+                        };
 
-                let err2 = self.write_common_schema_span(
-                    &span_es,
-                    &mut eb,
-                    &span_data.name,
-                    span_data,
-                    &span_data.span_context,
-                    export_payload_as_json,
-                    attributes,
-                );
+                        if !links_es.enabled() {
+                            return Ok(());
+                        }
 
-                err = err.and(err2);
+                        self.write_span_links(
+                            &links_es,
+                            &mut eb,
+                            &activities,
+                            &span_data.name,
+                            &span_data.start_time,
+                            &mut span_data.links.iter(),
+                        )
+                    })
+                    .and_then(|_| {
+                        self.write_span_event(
+                            &span_es,
+                            &mut eb,
+                            &span_data.name,
+                            &activities,
+                            &span_data.end_time,
+                            Some(&span_data.span_kind),
+                            &span_data.status,
+                            &mut span_data.attributes.iter(),
+                            false,
+                            true,
+                            export_payload_as_json,
+                        )
+                    });
             }
-        }
 
-        err
+            if provider.get_export_common_schema_event() {
+                let span_es = if let Some(es) = self
+                    .provider
+                    .find_set(Level::Informational, provider.get_span_keywords())
+                {
+                    es
+                } else {
+                    return Ok(());
+                };
+
+                if span_es.enabled() {
+                    let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
+
+                    let err2 = self.write_common_schema_span(
+                        &span_es,
+                        &mut eb,
+                        &span_data.name,
+                        span_data,
+                        &span_data.span_context,
+                        export_payload_as_json,
+                        attributes,
+                    );
+
+                    err = err.and(err2);
+                }
+            }
+
+            err
+        })
     }
 }
