@@ -157,7 +157,7 @@ impl ExporterBuilder {
 
     #[cfg(all(target_os = "linux"))]
     pub fn with_provider_group(mut self, name: &str) -> Self {
-        self.provider_group = ProviderGroup::Linux(Cow::Borrowed(name).to_owned());
+        self.provider_group = ProviderGroup::Linux(Cow::Owned(name.to_owned()));
         self
     }
 

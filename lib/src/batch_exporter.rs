@@ -47,7 +47,7 @@ impl<C: ExporterConfig + Send + Sync> BatchExporter<C, EtwEventExporter> {
 impl<C: ExporterConfig + Send + Sync> BatchExporter<C, UserEventsExporter> {
     pub(crate) fn new(provider_name: &str, provider_group: ProviderGroup, _use_byte_for_bools: bool, exporter_config: C) -> Self {
         let mut options = linux_tld::Provider::options();
-        if let ProviderGroup::Linux(name) = provider_group {
+        if let ProviderGroup::Linux(ref name) = provider_group {
             options = *options.group_name(&name);
         }
         let mut provider = linux_tld::Provider::new(
