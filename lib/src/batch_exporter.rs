@@ -55,14 +55,28 @@ impl<C: ExporterConfig + Send + Sync> BatchExporter<C, UserEventsExporter> {
             &options,
         );
 
-        // Standard real-time level/keyword pairs
-        provider.register_set(linux_tlg::Level::Informational, 1);
-        provider.register_set(linux_tlg::Level::Verbose, 2);
-        provider.register_set(linux_tlg::Level::Verbose, 4);
+        #[cfg(not(test))]
+        {
+            // Standard real-time level/keyword pairs
+            provider.register_set(linux_tlg::Level::Informational, 1);
+            provider.register_set(linux_tlg::Level::Verbose, 2);
+            provider.register_set(linux_tlg::Level::Verbose, 4);
 
-        // Common Schema events use a level based on a span's Status
-        provider.register_set(linux_tlg::Level::Error, 1);
-        provider.register_set(linux_tlg::Level::Verbose, 1);
+            // Common Schema events use a level based on a span's Status
+            provider.register_set(linux_tlg::Level::Error, 1);
+            provider.register_set(linux_tlg::Level::Verbose, 1);
+        }
+        #[cfg(test)]
+        {
+            // Standard real-time level/keyword pairs
+            provider.create_unregistered(true, linux_tlg::Level::Informational, 1);
+            provider.create_unregistered(true, linux_tlg::Level::Verbose, 2);
+            provider.create_unregistered(true, linux_tlg::Level::Verbose, 4);
+
+            // Common Schema events use a level based on a span's Status
+            provider.create_unregistered(true, linux_tlg::Level::Error, 1);
+            provider.create_unregistered(true, linux_tlg::Level::Verbose, 1);
+        }
 
         let exporter = BatchExporter {
             config: exporter_config,

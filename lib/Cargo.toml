@@ -42,3 +42,7 @@ etw_helpers = {version="0.1", path="../../etw_helpers"}
 [[bench]]
 name = "etw"
 harness = false
+
+[[bench]]
+name = "user_events"
+harness = false

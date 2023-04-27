@@ -4,8 +4,8 @@
 mod constants;
 #[path = "../src/error.rs"]
 mod error;
-#[path = "../src/etw_exporter.rs"]
-mod etw_exporter;
+#[path = "../src/user_events_exporter.rs"]
+mod user_events_exporter;
 #[path = "../src/exporter_traits.rs"]
 mod exporter_traits;
 #[path = "../src/json.rs"]
@@ -13,15 +13,13 @@ mod json;
 
 use crate::exporter_traits::*;
 use criterion::{criterion_group, criterion_main, Criterion};
-use etw_exporter::EtwEventExporter;
-use etw_helpers::*;
+use user_events_exporter::UserEventsExporter;
 use opentelemetry::trace::{SpanContext, SpanId, SpanKind, TraceFlags, TraceState};
 use opentelemetry::InstrumentationLibrary;
 use opentelemetry_sdk::{
     export::trace::SpanData,
     trace::{EvictedHashMap, EvictedQueue},
 };
-use rsevents::Awaitable;
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -52,38 +50,21 @@ impl ExporterConfig for BenchExporterConfig {
     }
 }
 
-fn provider_enabled_callback(
-    _source_id: &tracelogging::Guid,
-    _event_control_code: u32,
-    _level: tracelogging::Level,
-    _match_any_keyword: u64,
-    _match_all_keyword: u64,
-    _filter_data: usize,
-    callback_context: usize,
-) {
-    unsafe {
-        let ctx =
-            &*(callback_context as *const std::ffi::c_void as *const rsevents::ManualResetEvent);
-        ctx.set();
-    }
-}
-
-static BENCH_PROVIDER_ENABLED_EVENT: rsevents::ManualResetEvent =
-    rsevents::ManualResetEvent::new(rsevents::EventState::Unset);
-
-#[cfg(all(target_os = "windows"))]
-pub fn etw_benchmark(c: &mut Criterion) {
-    let mut options = tracelogging_dynamic::Provider::options();
-    let options = options.callback(
-        provider_enabled_callback,
-        &BENCH_PROVIDER_ENABLED_EVENT as *const rsevents::ManualResetEvent as usize,
+#[cfg(all(target_os = "linux"))]
+pub fn user_events_benchmark(c: &mut Criterion) {
+    let mut provider = linux_tld::Provider::new(
+        "otel_bench",
+        &linux_tld::ProviderOptions::default(),
     );
 
-    let provider = Arc::pin(tracelogging_dynamic::Provider::new("otel-bench", &options));
-    unsafe {
-        provider.as_ref().register();
-    }
-    let provider_id = provider.id().clone();
+    // Standard real-time level/keyword pairs
+    provider.create_unregistered(true, linux_tlg::Level::Informational, 1);
+    provider.create_unregistered(true, linux_tlg::Level::Verbose, 2);
+    provider.create_unregistered(true, linux_tlg::Level::Verbose, 4);
+
+    // Common Schema events use a level based on a span's Status
+    provider.create_unregistered(true, linux_tlg::Level::Error, 1);
+    provider.create_unregistered(true, linux_tlg::Level::Verbose, 1);
 
     let instrumentation_lib = InstrumentationLibrary::new(Cow::Borrowed("bench"), None, None);
 
@@ -110,7 +91,7 @@ pub fn etw_benchmark(c: &mut Criterion) {
         instrumentation_lib,
     };
 
-    let exporter = EtwEventExporter::new(provider, tracelogging::InType::Bool32);
+    let exporter = UserEventsExporter::new(Arc::new(provider));
     let mut config = BenchExporterConfig {
         export_common_schema_event: false,
         export_span_events: false,
@@ -121,14 +102,6 @@ pub fn etw_benchmark(c: &mut Criterion) {
     group.bench_function("provider disabled", |b| {
         b.iter(|| (exporter.log_span_data(&config, &span_data)))
     });
-
-    let h = EtwSession::get_or_start_etw_session(windows::s!("otel-bench"), true)
-        .expect("can't start etw session");
-
-    h.enable_provider(&windows::core::GUID::from_u128(provider_id.to_u128()))
-        .unwrap();
-
-    BENCH_PROVIDER_ENABLED_EVENT.wait();
 
     config.export_common_schema_event = true;
 
@@ -150,10 +123,10 @@ pub fn etw_benchmark(c: &mut Criterion) {
     });
 }
 
-#[cfg(all(target_os = "linux"))]
-pub fn etw_benchmark(_c: &mut Criterion) {
+#[cfg(all(target_os = "windows"))]
+pub fn user_events_benchmark(_c: &mut Criterion) {
 
 }
 
-criterion_group!(benches, etw_benchmark);
+criterion_group!(benches, user_events_benchmark);
 criterion_main!(benches);
