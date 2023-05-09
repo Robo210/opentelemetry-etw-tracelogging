@@ -586,9 +586,9 @@ impl EventExporter for EtwEventExporter {
     }
 
     // Called by the real-time exporter when a span is started
-    fn log_span_start<C, S>(&self, provider: &C, span: &S) -> ExportResult
+    fn log_span_start<C, S>(&self, provider: &ExporterConfig<C>, span: &S) -> ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
         if !provider.get_export_span_events() {
@@ -655,9 +655,9 @@ impl EventExporter for EtwEventExporter {
     }
 
     // Called by the real-time exporter when a span is ended
-    fn log_span_end<C, S>(&self, provider: &C, span: &S) -> ExportResult
+    fn log_span_end<C, S>(&self, provider: &ExporterConfig<C>, span: &S) -> ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
         let span_keywords = provider.get_span_keywords();
@@ -723,12 +723,12 @@ impl EventExporter for EtwEventExporter {
     // Called by the real-time exporter when an event is added to a span
     fn log_span_event<C, S>(
         &self,
-        provider: &C,
+        provider: &ExporterConfig<C>,
         event: opentelemetry_api::trace::Event,
         span: &S,
     ) -> ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
         let event_keywords = provider.get_event_keywords();
@@ -818,9 +818,9 @@ impl EventExporter for EtwEventExporter {
     }
 
     // Called by the batch exporter sometime after span is completed
-    fn log_span_data<C>(&self, provider: &C, span_data: &SpanData) -> ExportResult
+    fn log_span_data<C>(&self, provider: &ExporterConfig<C>, span_data: &SpanData) -> ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
     {
         let span_keywords = provider.get_span_keywords();
         let event_keywords = provider.get_event_keywords();

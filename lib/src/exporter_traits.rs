@@ -5,53 +5,33 @@ use std::{
 
 use opentelemetry::trace::{SpanId, TraceId};
 
-pub trait ExporterConfig {
+/// Implement this trait to provide an override for
+/// event keywords or levels.
+///
+/// By default, span start and stop events are logged with keyword 1 and
+/// [`tracelogging::Level::Informational`].
+/// Events attached to the span are logged with keyword 2 and [`tracelogging::Level::Verbose`].
+/// Span Links are logged as events with keyword 4 and [`tracelogging::Level::Verbose`].
+pub trait KeywordLevelProvider : Send + Sync {
+    /// The keyword(s) to use for Span start/stop events.
     fn get_span_keywords(&self) -> u64;
+    /// The keyword(s) to use for Span Event events.
     fn get_event_keywords(&self) -> u64;
+    /// The keyword(s) to use for Span Link events.
     fn get_links_keywords(&self) -> u64;
-    fn get_export_as_json(&self) -> bool;
-    fn get_export_common_schema_event(&self) -> bool;
-    fn get_export_span_events(&self) -> bool;
-}
-
-// A wrapper for user-provided exporter configs
-pub(crate) struct BoxedExporterConfig {
-    pub(crate) config: Box<dyn ExporterConfig + Send + Sync>,
-}
-
-impl ExporterConfig for BoxedExporterConfig {
-    fn get_span_keywords(&self) -> u64 {
-        self.config.get_span_keywords()
-    }
-
-    fn get_event_keywords(&self) -> u64 {
-        self.config.get_event_keywords()
-    }
-
-    fn get_links_keywords(&self) -> u64 {
-        self.config.get_links_keywords()
-    }
-
-    fn get_export_as_json(&self) -> bool {
-        self.config.get_export_as_json()
-    }
-
-    fn get_export_common_schema_event(&self) -> bool {
-        self.config.get_export_common_schema_event()
-    }
-
-    fn get_export_span_events(&self) -> bool {
-        self.config.get_export_span_events()
-    }
 }
 
 #[derive(Clone)]
-pub(crate) struct DefaultExporterConfig {
+pub struct ExporterConfig<T: KeywordLevelProvider> {
+    pub(crate) kwl: T,
+    pub(crate) json: bool,
     pub(crate) common_schema: bool,
     pub(crate) etw_activities: bool,
 }
 
-impl ExporterConfig for DefaultExporterConfig {
+pub(crate) struct DefaultKeywordLevelProvider;
+
+impl KeywordLevelProvider for DefaultKeywordLevelProvider {
     fn get_span_keywords(&self) -> u64 {
         1
     }
@@ -63,16 +43,46 @@ impl ExporterConfig for DefaultExporterConfig {
     fn get_links_keywords(&self) -> u64 {
         4
     }
+}
 
-    fn get_export_as_json(&self) -> bool {
-        false
+impl<> KeywordLevelProvider for Box<dyn KeywordLevelProvider> {
+    fn get_span_keywords(&self) -> u64 {
+        self.as_ref().get_span_keywords()
     }
 
-    fn get_export_common_schema_event(&self) -> bool {
+    fn get_event_keywords(&self) -> u64 {
+        self.as_ref().get_event_keywords()
+    }
+
+    fn get_links_keywords(&self) -> u64 {
+        self.as_ref().get_links_keywords()
+    }
+}
+
+impl<T: KeywordLevelProvider> KeywordLevelProvider for ExporterConfig<T> {
+    fn get_span_keywords(&self) -> u64 {
+        self.kwl.get_span_keywords()
+    }
+
+    fn get_event_keywords(&self) -> u64 {
+        self.kwl.get_event_keywords()
+    }
+
+    fn get_links_keywords(&self) -> u64 {
+        self.kwl.get_links_keywords()
+    }
+}
+
+impl<T: KeywordLevelProvider> ExporterConfig<T> {
+    pub(crate) fn get_export_as_json(&self) -> bool {
+        self.json
+    }
+
+    pub(crate) fn get_export_common_schema_event(&self) -> bool {
         self.common_schema
     }
 
-    fn get_export_span_events(&self) -> bool {
+    pub(crate) fn get_export_span_events(&self) -> bool {
         self.etw_activities
     }
 }
@@ -87,42 +97,42 @@ pub trait EventExporter {
     // Called by the real-time exporter when a span is started
     fn log_span_start<C, S>(
         &self,
-        provider: &C,
+        provider: &ExporterConfig<C>,
         span: &S,
     ) -> opentelemetry_sdk::export::trace::ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan;
 
     // Called by the real-time exporter when a span is ended
     fn log_span_end<C, S>(
         &self,
-        provider: &C,
+        provider: &ExporterConfig<C>,
         span: &S,
     ) -> opentelemetry_sdk::export::trace::ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan;
 
     // Called by the real-time exporter when an event is added to a span
     fn log_span_event<C, S>(
         &self,
-        provider: &C,
+        provider: &ExporterConfig<C>,
         event: opentelemetry_api::trace::Event,
         span: &S,
     ) -> opentelemetry_sdk::export::trace::ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan;
 
     // Called by the batch exporter sometime after span is completed
     fn log_span_data<C>(
         &self,
-        provider: &C,
+        provider: &ExporterConfig<C>,
         span_data: &opentelemetry_sdk::export::trace::SpanData,
     ) -> opentelemetry_sdk::export::trace::ExportResult
     where
-        C: ExporterConfig;
+        C: KeywordLevelProvider;
 }
 
 pub(crate) struct Activities {

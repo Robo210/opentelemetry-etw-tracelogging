@@ -9,14 +9,14 @@ use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
 use std::fmt::Debug;
 use std::sync::Arc;
 
-pub struct BatchExporter<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> {
-    config: C,
+pub(crate) struct BatchExporter<C: KeywordLevelProvider, E: EventExporter + Send + Sync> {
+    config: ExporterConfig<C>,
     ebw: E,
 }
 
 #[cfg(all(target_os = "windows"))]
-impl<C: ExporterConfig + Send + Sync> BatchExporter<C, EtwEventExporter> {
-    pub(crate) fn new(provider_name: &str, provider_group: ProviderGroup, use_byte_for_bools: bool, exporter_config: C) -> Self {
+impl<C: KeywordLevelProvider> BatchExporter<C, EtwEventExporter> {
+    pub(crate) fn new(provider_name: &str, provider_group: ProviderGroup, use_byte_for_bools: bool, exporter_config: ExporterConfig<C>) -> Self {
         let mut options = tracelogging_dynamic::Provider::options();
         if let ProviderGroup::Windows(guid) = provider_group {
             options = *options.group_id(&guid);
@@ -44,7 +44,7 @@ impl<C: ExporterConfig + Send + Sync> BatchExporter<C, EtwEventExporter> {
 }
 
 #[cfg(all(target_os = "linux"))]
-impl<C: ExporterConfig + Send + Sync> BatchExporter<C, UserEventsExporter> {
+impl<C: KeywordLevelProvider> BatchExporter<ExporterConfig<C>, UserEventsExporter> {
     pub(crate) fn new(provider_name: &str, provider_group: ProviderGroup, _use_byte_for_bools: bool, exporter_config: C) -> Self {
         let mut options = linux_tld::Provider::options();
         if let ProviderGroup::Linux(ref name) = provider_group {
@@ -58,24 +58,24 @@ impl<C: ExporterConfig + Send + Sync> BatchExporter<C, UserEventsExporter> {
         #[cfg(not(test))]
         {
             // Standard real-time level/keyword pairs
-            provider.register_set(linux_tlg::Level::Informational, 1);
-            provider.register_set(linux_tlg::Level::Verbose, 2);
-            provider.register_set(linux_tlg::Level::Verbose, 4);
+            provider.register_set(linux_tlg::Level::Informational, exporter_config.get_span_keywords());
+            provider.register_set(linux_tlg::Level::Verbose, exporter_config.get_event_keywords());
+            provider.register_set(linux_tlg::Level::Verbose, exporter_config.get_links_keywords());
 
             // Common Schema events use a level based on a span's Status
-            provider.register_set(linux_tlg::Level::Error, 1);
-            provider.register_set(linux_tlg::Level::Verbose, 1);
+            provider.register_set(linux_tlg::Level::Error, exporter_config.get_span_keywords());
+            provider.register_set(linux_tlg::Level::Verbose, exporter_config.get_span_keywords());
         }
         #[cfg(test)]
         {
             // Standard real-time level/keyword pairs
-            provider.create_unregistered(true, linux_tlg::Level::Informational, 1);
-            provider.create_unregistered(true, linux_tlg::Level::Verbose, 2);
-            provider.create_unregistered(true, linux_tlg::Level::Verbose, 4);
+            provider.create_unregistered(true, linux_tlg::Level::Informational, exporter_config.get_span_keywords());
+            provider.create_unregistered(true, linux_tlg::Level::Verbose, exporter_config.get_event_keywords());
+            provider.create_unregistered(true, linux_tlg::Level::Verbose, exporter_config.get_links_keywords());
 
             // Common Schema events use a level based on a span's Status
-            provider.create_unregistered(true, linux_tlg::Level::Error, 1);
-            provider.create_unregistered(true, linux_tlg::Level::Verbose, 1);
+            provider.create_unregistered(true, linux_tlg::Level::Error, exporter_config.get_span_keywords());
+            provider.create_unregistered(true, linux_tlg::Level::Verbose, exporter_config.get_span_keywords());
         }
 
         let exporter = BatchExporter {
@@ -87,7 +87,7 @@ impl<C: ExporterConfig + Send + Sync> BatchExporter<C, UserEventsExporter> {
     }
 }
 
-impl<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> Debug
+impl<C: KeywordLevelProvider, E: EventExporter + Send + Sync> Debug
     for BatchExporter<C, E>
 {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -95,7 +95,7 @@ impl<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> Debug
     }
 }
 
-impl<C: ExporterConfig + Send + Sync, E: EventExporter + Send + Sync> SpanExporter
+impl<C: KeywordLevelProvider, E: EventExporter + Send + Sync> SpanExporter
     for BatchExporter<C, E>
 {
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
@@ -117,7 +117,9 @@ mod tests {
             "my_provider_name",
             ProviderGroup::Unset,
             true,
-            DefaultExporterConfig {
+            ExporterConfig::<DefaultKeywordLevelProvider> {
+                kwl: DefaultKeywordLevelProvider,
+                json: false,
                 common_schema: true,
                 etw_activities: true,
             },

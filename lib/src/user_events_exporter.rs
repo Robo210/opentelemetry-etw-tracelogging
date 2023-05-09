@@ -11,42 +11,6 @@ use crate::{exporter_traits::*, json, error::*, constants::*};
 
 thread_local! {static EBW: RefCell<EventBuilder> = RefCell::new(EventBuilder::new());}
 
-#[derive(Clone)]
-pub(crate) struct UserEventsExporterConfig {
-    pub(crate) span_keywords: u64,
-    pub(crate) event_keywords: u64,
-    pub(crate) links_keywords: u64,
-    pub(crate) json: bool,
-    pub(crate) common_schema: bool,
-    pub(crate) etw_activities: bool,
-}
-
-impl ExporterConfig for UserEventsExporterConfig {
-    fn get_span_keywords(&self) -> u64 {
-        self.span_keywords
-    }
-
-    fn get_event_keywords(&self) -> u64 {
-        self.event_keywords
-    }
-
-    fn get_links_keywords(&self) -> u64 {
-        self.links_keywords
-    }
-
-    fn get_export_as_json(&self) -> bool {
-        self.json
-    }
-
-    fn get_export_common_schema_event(&self) -> bool {
-        self.common_schema
-    }
-
-    fn get_export_span_events(&self) -> bool {
-        self.etw_activities
-    }
-}
-
 pub(crate) struct UserEventsExporter {
     provider: Arc<linux_tld::Provider>,
 }
@@ -510,9 +474,9 @@ impl EventExporter for UserEventsExporter {
     }
 
     // Called by the real-time exporter when a span is started
-    fn log_span_start<C, S>(&self, provider: &C, span: &S) -> ExportResult
+    fn log_span_start<C, S>(&self, provider: &ExporterConfig<C>, span: &S) -> ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
         if !provider.get_export_span_events() {
@@ -587,9 +551,9 @@ impl EventExporter for UserEventsExporter {
     }
 
     // Called by the real-time exporter when a span is ended
-    fn log_span_end<C, S>(&self, provider: &C, span: &S) -> ExportResult
+    fn log_span_end<C, S>(&self, provider: &ExporterConfig<C>, span: &S) -> ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
         //let event_keywords = provider.get_event_keywords();
@@ -655,12 +619,12 @@ impl EventExporter for UserEventsExporter {
     // Called by the real-time exporter when an event is added to a span
     fn log_span_event<C, S>(
         &self,
-        provider: &C,
+        provider: &ExporterConfig<C>,
         event: opentelemetry_api::trace::Event,
         span: &S,
     ) -> ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
         let span_es = if let Some(es) = self
@@ -758,9 +722,9 @@ impl EventExporter for UserEventsExporter {
     }
 
     // Called by the batch exporter sometime after span is completed
-    fn log_span_data<C>(&self, provider: &C, span_data: &SpanData) -> ExportResult
+    fn log_span_data<C>(&self, provider: &ExporterConfig<C>, span_data: &SpanData) -> ExportResult
     where
-        C: ExporterConfig,
+        C: KeywordLevelProvider,
     {
         let export_payload_as_json = provider.get_export_as_json();
 

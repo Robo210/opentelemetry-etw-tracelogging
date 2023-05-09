@@ -24,12 +24,9 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-struct BenchExporterConfig {
-    export_common_schema_event: bool,
-    export_span_events: bool,
-}
+struct BenchExporterConfig;
 
-impl ExporterConfig for BenchExporterConfig {
+impl KeywordLevelProvider for BenchExporterConfig {
     fn get_span_keywords(&self) -> u64 {
         1
     }
@@ -38,15 +35,6 @@ impl ExporterConfig for BenchExporterConfig {
     }
     fn get_links_keywords(&self) -> u64 {
         4
-    }
-    fn get_export_as_json(&self) -> bool {
-        false
-    }
-    fn get_export_common_schema_event(&self) -> bool {
-        self.export_common_schema_event
-    }
-    fn get_export_span_events(&self) -> bool {
-        self.export_span_events
     }
 }
 
@@ -92,9 +80,11 @@ pub fn user_events_benchmark(c: &mut Criterion) {
     };
 
     let exporter = UserEventsExporter::new(Arc::new(provider));
-    let mut config = BenchExporterConfig {
-        export_common_schema_event: false,
-        export_span_events: false,
+    let mut config = ExporterConfig {
+        kwl: BenchExporterConfig,
+        json: false,
+        common_schema: false,
+        etw_activities: false,
     };
 
     let mut group = c.benchmark_group("export span_data");
@@ -103,20 +93,20 @@ pub fn user_events_benchmark(c: &mut Criterion) {
         b.iter(|| (exporter.log_span_data(&config, &span_data)))
     });
 
-    config.export_common_schema_event = true;
+    config.common_schema = true;
 
     group.bench_function("provider enabled/cs4", |b| {
         b.iter(|| (exporter.log_span_data(&config, &span_data)))
     });
 
-    config.export_common_schema_event = false;
-    config.export_span_events = true;
+    config.common_schema = false;
+    config.etw_activities = true;
 
     group.bench_function("provider enabled/span", |b| {
         b.iter(|| (exporter.log_span_data(&config, &span_data)))
     });
 
-    config.export_common_schema_event = true;
+    config.common_schema = true;
 
     group.bench_function("provider enabled/cs4+span", |b| {
         b.iter(|| (exporter.log_span_data(&config, &span_data)))

@@ -129,9 +129,7 @@ mod realtime_exporter;
 mod user_events_exporter;
 
 pub mod span_exporter {
-    pub use crate::batch_exporter::*;
     pub use crate::builder::*;
-    pub use crate::constants::*;
     pub use crate::error::*;
     pub use crate::exporter_traits::*;
     pub use crate::realtime_exporter::*;

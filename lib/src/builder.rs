@@ -40,7 +40,7 @@ pub struct ExporterBuilder {
     emit_realtime_events: bool,
     runtime: Option<EtwExporterAsyncRuntime>,
     trace_config: Option<opentelemetry_sdk::trace::Config>,
-    exporter_config: Option<BoxedExporterConfig>,
+    exporter_config: Option<Box<dyn KeywordLevelProvider>>,
 }
 
 /// Create an exporter builder. After configuring the builder,
@@ -93,20 +93,13 @@ impl ExporterBuilder {
     }
 
     /// Override the default keywords and levels for events.
-    /// Provide an implementation of the [`ExporterConfig`] trait that will
+    /// Provide an implementation of the [`KeywordLevelProvider`] trait that will
     /// return the desired keywords and level values for each type of event.
-    ///
-    /// By default, span start and stop events are logged with keyword 1 and
-    /// [`tracelogging::Level::Informational`].
-    /// Events attached to the span are logged with keyword 2 and [`tracelogging::Level::Verbose`].
-    /// Span Links are logged as events with keyword 4 and [`tracelogging::Level::Verbose`].
     pub fn with_exporter_config(
         mut self,
-        config: impl ExporterConfig + Send + Sync + 'static,
+        config: impl KeywordLevelProvider + 'static,
     ) -> Self {
-        self.exporter_config = Some(BoxedExporterConfig {
-            config: Box::new(config),
-        });
+        self.exporter_config = Some(Box::new(config));
         self
     }
 
@@ -229,7 +222,12 @@ impl ExporterBuilder {
                                     &self.provider_name,
                                     self.provider_group,
                                     self.use_byte_for_bools,
-                                    exporter_config,
+                                    ExporterConfig{
+                                        kwl: exporter_config,
+                                        json: self.json,
+                                        common_schema: self.emit_common_schema_events,
+                                        etw_activities: self.emit_realtime_events
+                                    }
                                 ))
                         }
                         None => opentelemetry_sdk::trace::TracerProvider::builder()
@@ -237,7 +235,9 @@ impl ExporterBuilder {
                                 &self.provider_name,
                                 self.provider_group,
                                 self.use_byte_for_bools,
-                                DefaultExporterConfig {
+                                ExporterConfig {
+                                    kwl: DefaultKeywordLevelProvider,
+                                    json: self.json,
                                     common_schema: self.emit_common_schema_events,
                                     etw_activities: self.emit_realtime_events,
                                 },
@@ -273,7 +273,12 @@ impl ExporterBuilder {
                                     &self.provider_name,
                                     self.provider_group,
                                     self.use_byte_for_bools,
-                                    exporter_config,
+                                    ExporterConfig{
+                                        kwl: exporter_config,
+                                        json: self.json,
+                                        common_schema: self.emit_common_schema_events,
+                                        etw_activities: self.emit_realtime_events
+                                    }
                                 ),
                                 runtime,
                             )
@@ -284,7 +289,9 @@ impl ExporterBuilder {
                                     &self.provider_name,
                                     self.provider_group,
                                     self.use_byte_for_bools,
-                                    DefaultExporterConfig {
+                                    ExporterConfig {
+                                        kwl: DefaultKeywordLevelProvider,
+                                        json: self.json,
                                         common_schema: self.emit_common_schema_events,
                                         etw_activities: self.emit_realtime_events,
                                     },
@@ -323,7 +330,12 @@ impl ExporterBuilder {
                         self.provider_group,
                         otel_config,
                         self.use_byte_for_bools,
-                        exporter_config,
+                        ExporterConfig{
+                            kwl: exporter_config,
+                            json: self.json,
+                            common_schema: self.emit_common_schema_events,
+                            etw_activities: self.emit_realtime_events
+                        }
                     );
 
                     let _ = global::set_tracer_provider(provider);
@@ -334,7 +346,9 @@ impl ExporterBuilder {
                         self.provider_group,
                         otel_config,
                         self.use_byte_for_bools,
-                        DefaultExporterConfig {
+                        ExporterConfig {
+                            kwl: DefaultKeywordLevelProvider,
+                            json: self.json,
                             common_schema: self.emit_common_schema_events,
                             etw_activities: self.emit_realtime_events,
                         },
