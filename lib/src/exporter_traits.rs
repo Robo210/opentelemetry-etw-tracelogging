@@ -12,7 +12,7 @@ use opentelemetry::trace::{SpanId, TraceId};
 /// [`tracelogging::Level::Informational`].
 /// Events attached to the span are logged with keyword 2 and [`tracelogging::Level::Verbose`].
 /// Span Links are logged as events with keyword 4 and [`tracelogging::Level::Verbose`].
-pub trait KeywordLevelProvider : Send + Sync {
+pub trait KeywordLevelProvider: Send + Sync {
     /// The keyword(s) to use for Span start/stop events.
     fn get_span_keywords(&self) -> u64;
     /// The keyword(s) to use for Span Event events.
@@ -48,7 +48,7 @@ impl KeywordLevelProvider for DefaultKeywordLevelProvider {
     }
 }
 
-impl<> KeywordLevelProvider for Box<dyn KeywordLevelProvider> {
+impl KeywordLevelProvider for Box<dyn KeywordLevelProvider> {
     fn get_span_keywords(&self) -> u64 {
         self.as_ref().get_span_keywords()
     }

@@ -16,16 +16,18 @@ pub(crate) struct BatchExporter<C: KeywordLevelProvider, E: EventExporter + Send
 
 #[cfg(all(target_os = "windows"))]
 impl<C: KeywordLevelProvider> BatchExporter<C, EtwEventExporter> {
-    pub(crate) fn new(provider_name: &str, provider_group: ProviderGroup, use_byte_for_bools: bool, exporter_config: ExporterConfig<C>) -> Self {
+    pub(crate) fn new(
+        provider_name: &str,
+        provider_group: ProviderGroup,
+        use_byte_for_bools: bool,
+        exporter_config: ExporterConfig<C>,
+    ) -> Self {
         let mut options = tracelogging_dynamic::Provider::options();
         if let ProviderGroup::Windows(guid) = provider_group {
             options = *options.group_id(&guid);
         }
 
-        let provider = Arc::pin(tracelogging_dynamic::Provider::new(
-            provider_name,
-            &options,
-        ));
+        let provider = Arc::pin(tracelogging_dynamic::Provider::new(provider_name, &options));
         unsafe {
             provider.as_ref().register();
         }
@@ -45,37 +47,71 @@ impl<C: KeywordLevelProvider> BatchExporter<C, EtwEventExporter> {
 
 #[cfg(all(target_os = "linux"))]
 impl<C: KeywordLevelProvider> BatchExporter<ExporterConfig<C>, UserEventsExporter> {
-    pub(crate) fn new(provider_name: &str, provider_group: ProviderGroup, _use_byte_for_bools: bool, exporter_config: C) -> Self {
+    pub(crate) fn new(
+        provider_name: &str,
+        provider_group: ProviderGroup,
+        _use_byte_for_bools: bool,
+        exporter_config: C,
+    ) -> Self {
         let mut options = linux_tld::Provider::options();
         if let ProviderGroup::Linux(ref name) = provider_group {
             options = *options.group_name(&name);
         }
-        let mut provider = linux_tld::Provider::new(
-            provider_name,
-            &options,
-        );
+        let mut provider = linux_tld::Provider::new(provider_name, &options);
 
         #[cfg(not(test))]
         {
             // Standard real-time level/keyword pairs
-            provider.register_set(linux_tlg::Level::Informational, exporter_config.get_span_keywords());
-            provider.register_set(linux_tlg::Level::Verbose, exporter_config.get_event_keywords());
-            provider.register_set(linux_tlg::Level::Verbose, exporter_config.get_links_keywords());
+            provider.register_set(
+                linux_tlg::Level::Informational,
+                exporter_config.get_span_keywords(),
+            );
+            provider.register_set(
+                linux_tlg::Level::Verbose,
+                exporter_config.get_event_keywords(),
+            );
+            provider.register_set(
+                linux_tlg::Level::Verbose,
+                exporter_config.get_links_keywords(),
+            );
 
             // Common Schema events use a level based on a span's Status
             provider.register_set(linux_tlg::Level::Error, exporter_config.get_span_keywords());
-            provider.register_set(linux_tlg::Level::Verbose, exporter_config.get_span_keywords());
+            provider.register_set(
+                linux_tlg::Level::Verbose,
+                exporter_config.get_span_keywords(),
+            );
         }
         #[cfg(test)]
         {
             // Standard real-time level/keyword pairs
-            provider.create_unregistered(true, linux_tlg::Level::Informational, exporter_config.get_span_keywords());
-            provider.create_unregistered(true, linux_tlg::Level::Verbose, exporter_config.get_event_keywords());
-            provider.create_unregistered(true, linux_tlg::Level::Verbose, exporter_config.get_links_keywords());
+            provider.create_unregistered(
+                true,
+                linux_tlg::Level::Informational,
+                exporter_config.get_span_keywords(),
+            );
+            provider.create_unregistered(
+                true,
+                linux_tlg::Level::Verbose,
+                exporter_config.get_event_keywords(),
+            );
+            provider.create_unregistered(
+                true,
+                linux_tlg::Level::Verbose,
+                exporter_config.get_links_keywords(),
+            );
 
             // Common Schema events use a level based on a span's Status
-            provider.create_unregistered(true, linux_tlg::Level::Error, exporter_config.get_span_keywords());
-            provider.create_unregistered(true, linux_tlg::Level::Verbose, exporter_config.get_span_keywords());
+            provider.create_unregistered(
+                true,
+                linux_tlg::Level::Error,
+                exporter_config.get_span_keywords(),
+            );
+            provider.create_unregistered(
+                true,
+                linux_tlg::Level::Verbose,
+                exporter_config.get_span_keywords(),
+            );
         }
 
         let exporter = BatchExporter {
@@ -87,17 +123,13 @@ impl<C: KeywordLevelProvider> BatchExporter<ExporterConfig<C>, UserEventsExporte
     }
 }
 
-impl<C: KeywordLevelProvider, E: EventExporter + Send + Sync> Debug
-    for BatchExporter<C, E>
-{
+impl<C: KeywordLevelProvider, E: EventExporter + Send + Sync> Debug for BatchExporter<C, E> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
 
-impl<C: KeywordLevelProvider, E: EventExporter + Send + Sync> SpanExporter
-    for BatchExporter<C, E>
-{
+impl<C: KeywordLevelProvider, E: EventExporter + Send + Sync> SpanExporter for BatchExporter<C, E> {
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
         for span in batch {
             let _ = self.ebw.log_span_data(&self.config, &span);

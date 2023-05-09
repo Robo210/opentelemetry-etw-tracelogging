@@ -142,9 +142,7 @@ pub fn etw_benchmark(c: &mut Criterion) {
 }
 
 #[cfg(all(target_os = "linux"))]
-pub fn etw_benchmark(_c: &mut Criterion) {
-
-}
+pub fn etw_benchmark(_c: &mut Criterion) {}
 
 criterion_group!(benches, etw_benchmark);
 criterion_main!(benches);

@@ -5,9 +5,9 @@ use opentelemetry::{
     Array, Key, Value,
 };
 use opentelemetry_sdk::export::trace::{ExportResult, SpanData};
-use std::{sync::Arc, time::SystemTime, cell::RefCell};
+use std::{cell::RefCell, sync::Arc, time::SystemTime};
 
-use crate::{exporter_traits::*, json, error::*, constants::*};
+use crate::{constants::*, error::*, exporter_traits::*, json};
 
 thread_local! {static EBW: RefCell<EventBuilder> = RefCell::new(EventBuilder::new());}
 

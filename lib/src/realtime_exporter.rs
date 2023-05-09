@@ -1,7 +1,7 @@
+use crate::builder::ProviderGroup;
 #[allow(unused_imports)]
 use crate::etw_exporter::*;
 use crate::exporter_traits::*;
-use crate::builder::ProviderGroup;
 #[allow(unused_imports)]
 use crate::user_events_exporter::*;
 use opentelemetry::InstrumentationLibrary;
@@ -113,7 +113,9 @@ impl<C: KeywordLevelProvider, E: EventExporter> RealtimeSpan<C, E> {
     }
 }
 
-impl<C: KeywordLevelProvider, E: EventExporter> opentelemetry_api::trace::Span for RealtimeSpan<C, E> {
+impl<C: KeywordLevelProvider, E: EventExporter> opentelemetry_api::trace::Span
+    for RealtimeSpan<C, E>
+{
     fn add_event_with_timestamp<N>(
         &mut self,
         name: N,
@@ -259,10 +261,7 @@ impl<C: KeywordLevelProvider> RealtimeTracerProvider<C, EtwEventExporter> {
             options = *options.group_id(&guid);
         }
 
-        let provider = Arc::pin(Provider::new(
-            provider_name,
-            &options,
-        ));
+        let provider = Arc::pin(Provider::new(provider_name, &options));
         unsafe {
             provider.as_ref().register();
         }
@@ -297,32 +296,61 @@ impl<C: ExporterConfig + KeywordLevelProvider> RealtimeTracerProvider<C, UserEve
         if let ProviderGroup::Linux(ref name) = provider_group {
             options = *options.group_name(&name);
         }
-        let mut provider = linux_tld::Provider::new(
-            provider_name,
-            &options,
-        );
+        let mut provider = linux_tld::Provider::new(provider_name, &options);
 
         #[cfg(not(test))]
         {
             // Standard real-time level/keyword pairs
-            provider.register_set(linux_tlg::Level::Informational, exporter_config.get_span_keywords());
-            provider.register_set(linux_tlg::Level::Verbose, exporter_config.get_event_keywords());
-            provider.register_set(linux_tlg::Level::Verbose, exporter_config.get_links_keywords());
+            provider.register_set(
+                linux_tlg::Level::Informational,
+                exporter_config.get_span_keywords(),
+            );
+            provider.register_set(
+                linux_tlg::Level::Verbose,
+                exporter_config.get_event_keywords(),
+            );
+            provider.register_set(
+                linux_tlg::Level::Verbose,
+                exporter_config.get_links_keywords(),
+            );
 
             // Common Schema events use a level based on a span's Status
             provider.register_set(linux_tlg::Level::Error, exporter_config.get_span_keywords());
-            provider.register_set(linux_tlg::Level::Verbose, exporter_config.get_span_keywords());
+            provider.register_set(
+                linux_tlg::Level::Verbose,
+                exporter_config.get_span_keywords(),
+            );
         }
         #[cfg(test)]
         {
             // Standard real-time level/keyword pairs
-            provider.create_unregistered(true, linux_tlg::Level::Informational, exporter_config.get_span_keywords());
-            provider.create_unregistered(true, linux_tlg::Level::Verbose, exporter_config.get_event_keywords());
-            provider.create_unregistered(true, linux_tlg::Level::Verbose, exporter_config.get_links_keywords());
+            provider.create_unregistered(
+                true,
+                linux_tlg::Level::Informational,
+                exporter_config.get_span_keywords(),
+            );
+            provider.create_unregistered(
+                true,
+                linux_tlg::Level::Verbose,
+                exporter_config.get_event_keywords(),
+            );
+            provider.create_unregistered(
+                true,
+                linux_tlg::Level::Verbose,
+                exporter_config.get_links_keywords(),
+            );
 
             // Common Schema events use a level based on a span's Status
-            provider.create_unregistered(true, linux_tlg::Level::Error, exporter_config.get_span_keywords());
-            provider.create_unregistered(true, linux_tlg::Level::Verbose, exporter_config.get_span_keywords());
+            provider.create_unregistered(
+                true,
+                linux_tlg::Level::Error,
+                exporter_config.get_span_keywords(),
+            );
+            provider.create_unregistered(
+                true,
+                linux_tlg::Level::Verbose,
+                exporter_config.get_span_keywords(),
+            );
         }
 
         let exporter_config = Arc::new(exporter_config);

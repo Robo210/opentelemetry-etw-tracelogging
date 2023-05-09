@@ -95,10 +95,7 @@ impl ExporterBuilder {
     /// Override the default keywords and levels for events.
     /// Provide an implementation of the [`KeywordLevelProvider`] trait that will
     /// return the desired keywords and level values for each type of event.
-    pub fn with_exporter_config(
-        mut self,
-        config: impl KeywordLevelProvider + 'static,
-    ) -> Self {
+    pub fn with_exporter_config(mut self, config: impl KeywordLevelProvider + 'static) -> Self {
         self.exporter_config = Some(Box::new(config));
         self
     }
@@ -187,14 +184,20 @@ impl ExporterBuilder {
             ProviderGroup::Unset => (),
             ProviderGroup::Windows(guid) => {
                 assert_ne!(guid, &Guid::zero(), "Provider GUID must not be zeroes");
-            },
+            }
             ProviderGroup::Linux(name) => {
-                assert!(linux_tld::ProviderOptions::is_valid_option_value(&name), "Provider names must be lower case ASCII or numeric digits");
+                assert!(
+                    linux_tld::ProviderOptions::is_valid_option_value(&name),
+                    "Provider names must be lower case ASCII or numeric digits"
+                );
             }
         }
 
         #[cfg(all(target_os = "linux"))]
-        if self.provider_name.contains(|f: char| {!f.is_ascii_alphanumeric()}) {
+        if self
+            .provider_name
+            .contains(|f: char| !f.is_ascii_alphanumeric())
+        {
             // The perf command is very particular about the provider names it accepts
             panic!("Linux provider names must be ASCII alphanumeric");
         }
@@ -222,12 +225,12 @@ impl ExporterBuilder {
                                     &self.provider_name,
                                     self.provider_group,
                                     self.use_byte_for_bools,
-                                    ExporterConfig{
+                                    ExporterConfig {
                                         kwl: exporter_config,
                                         json: self.json,
                                         common_schema: self.emit_common_schema_events,
-                                        etw_activities: self.emit_realtime_events
-                                    }
+                                        etw_activities: self.emit_realtime_events,
+                                    },
                                 ))
                         }
                         None => opentelemetry_sdk::trace::TracerProvider::builder()
@@ -261,7 +264,9 @@ impl ExporterBuilder {
                         #[cfg(any(feature = "rt-tokio"))]
                         EtwExporterAsyncRuntime::Tokio => opentelemetry_sdk::runtime::Tokio,
                         #[cfg(any(feature = "rt-tokio-current-thread"))]
-                        EtwExporterAsyncRuntime::TokioCurrentThread => opentelemetry_sdk::runtime::TokioCurrentThread,
+                        EtwExporterAsyncRuntime::TokioCurrentThread => {
+                            opentelemetry_sdk::runtime::TokioCurrentThread
+                        }
                         #[cfg(any(feature = "rt-async-std"))]
                         EtwExporterAsyncRuntime::AsyncStd => opentelemetry_sdk::runtime::AsyncStd,
                     };
@@ -273,12 +278,12 @@ impl ExporterBuilder {
                                     &self.provider_name,
                                     self.provider_group,
                                     self.use_byte_for_bools,
-                                    ExporterConfig{
+                                    ExporterConfig {
                                         kwl: exporter_config,
                                         json: self.json,
                                         common_schema: self.emit_common_schema_events,
-                                        etw_activities: self.emit_realtime_events
-                                    }
+                                        etw_activities: self.emit_realtime_events,
+                                    },
                                 ),
                                 runtime,
                             )
@@ -330,12 +335,12 @@ impl ExporterBuilder {
                         self.provider_group,
                         otel_config,
                         self.use_byte_for_bools,
-                        ExporterConfig{
+                        ExporterConfig {
                             kwl: exporter_config,
                             json: self.json,
                             common_schema: self.emit_common_schema_events,
-                            etw_activities: self.emit_realtime_events
-                        }
+                            etw_activities: self.emit_realtime_events,
+                        },
                     );
 
                     let _ = global::set_tracer_provider(provider);

@@ -4,16 +4,15 @@
 mod constants;
 #[path = "../src/error.rs"]
 mod error;
-#[path = "../src/user_events_exporter.rs"]
-mod user_events_exporter;
 #[path = "../src/exporter_traits.rs"]
 mod exporter_traits;
 #[path = "../src/json.rs"]
 mod json;
+#[path = "../src/user_events_exporter.rs"]
+mod user_events_exporter;
 
 use crate::exporter_traits::*;
 use criterion::{criterion_group, criterion_main, Criterion};
-use user_events_exporter::UserEventsExporter;
 use opentelemetry::trace::{SpanContext, SpanId, SpanKind, TraceFlags, TraceState};
 use opentelemetry::InstrumentationLibrary;
 use opentelemetry_sdk::{
@@ -23,6 +22,7 @@ use opentelemetry_sdk::{
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::SystemTime;
+use user_events_exporter::UserEventsExporter;
 
 struct BenchExporterConfig;
 
@@ -40,10 +40,8 @@ impl KeywordLevelProvider for BenchExporterConfig {
 
 #[cfg(all(target_os = "linux"))]
 pub fn user_events_benchmark(c: &mut Criterion) {
-    let mut provider = linux_tld::Provider::new(
-        "otel_bench",
-        &linux_tld::ProviderOptions::default(),
-    );
+    let mut provider =
+        linux_tld::Provider::new("otel_bench", &linux_tld::ProviderOptions::default());
 
     // Standard real-time level/keyword pairs
     provider.create_unregistered(true, linux_tlg::Level::Informational, 1);
@@ -114,9 +112,7 @@ pub fn user_events_benchmark(c: &mut Criterion) {
 }
 
 #[cfg(all(target_os = "windows"))]
-pub fn user_events_benchmark(_c: &mut Criterion) {
-
-}
+pub fn user_events_benchmark(_c: &mut Criterion) {}
 
 criterion_group!(benches, user_events_benchmark);
 criterion_main!(benches);
