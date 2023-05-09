@@ -21,7 +21,10 @@ pub trait KeywordLevelProvider : Send + Sync {
     fn get_links_keywords(&self) -> u64;
 }
 
+// Public because RealtimeSpan is parameterized for ExporterConfig<C: KeywordLevelProvider>
+// Should otherwise be pub(crate).
 #[derive(Clone)]
+#[doc(hidden)]
 pub struct ExporterConfig<T: KeywordLevelProvider> {
     pub(crate) kwl: T,
     pub(crate) json: bool,
@@ -91,6 +94,7 @@ pub trait EtwSpan {
     fn get_span_data(&self) -> &opentelemetry_sdk::export::trace::SpanData;
 }
 
+#[doc(hidden)]
 pub trait EventExporter {
     fn enabled(&self, level: u8, keyword: u64) -> bool;
 

@@ -100,6 +100,7 @@ pub fn etw_benchmark(c: &mut Criterion) {
 
     let exporter = EtwEventExporter::new(provider, tracelogging::InType::Bool32);
     let mut config = ExporterConfig {
+        //kwl: Box::new(BenchExporterConfig) as Box::<dyn KeywordLevelProvider>, // Using a boxed trait object has a measurable performance impact
         kwl: BenchExporterConfig,
         json: false,
         common_schema: false,
