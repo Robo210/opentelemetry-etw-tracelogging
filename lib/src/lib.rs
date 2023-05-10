@@ -78,7 +78,7 @@
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
 //!
-//! let tracer = opentelemetry_etw::span_exporter::new_exporter("MyEtwProviderName")
+//! let tracer = opentelemetry_etw_user_events::span_exporter::new_exporter("MyEtwProviderName")
 //!     .install();
 //!
 //! tracer.in_span("doing_work", |cx| {
@@ -126,11 +126,11 @@ mod batch_exporter;
 mod builder;
 mod constants;
 mod error;
-mod etw_exporter;
+mod etw;
 mod exporter_traits;
 mod json;
 mod realtime_exporter;
-mod user_events_exporter;
+mod user_events;
 
 pub mod span_exporter {
     pub use crate::builder::*;

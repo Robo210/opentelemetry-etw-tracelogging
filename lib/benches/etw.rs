@@ -4,8 +4,8 @@
 mod constants;
 #[path = "../src/error.rs"]
 mod error;
-#[path = "../src/etw_exporter.rs"]
-mod etw_exporter;
+#[path = "../src/etw.rs"]
+mod etw;
 #[path = "../src/exporter_traits.rs"]
 mod exporter_traits;
 #[path = "../src/json.rs"]
@@ -13,7 +13,7 @@ mod json;
 
 use crate::exporter_traits::*;
 use criterion::{criterion_group, criterion_main, Criterion};
-use etw_exporter::EtwEventExporter;
+use etw::EtwEventExporter;
 use etw_helpers::*;
 use opentelemetry::trace::{SpanContext, SpanId, SpanKind, TraceFlags, TraceState};
 use opentelemetry::InstrumentationLibrary;

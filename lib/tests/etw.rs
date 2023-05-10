@@ -68,7 +68,7 @@ mod functional {
 
         let span_context: SpanContext = SpanContext::empty_context();
 
-        let tracer = opentelemetry_etw::span_exporter::new_exporter(test_provider_name)
+        let tracer = opentelemetry_etw_user_events::span_exporter::new_exporter(test_provider_name)
             .with_common_schema_events()
             .without_realtime_events()
             .install();

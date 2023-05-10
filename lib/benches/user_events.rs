@@ -8,8 +8,8 @@ mod error;
 mod exporter_traits;
 #[path = "../src/json.rs"]
 mod json;
-#[path = "../src/user_events_exporter.rs"]
-mod user_events_exporter;
+#[path = "../src/user_events.rs"]
+mod user_events;
 
 use crate::exporter_traits::*;
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -22,7 +22,7 @@ use opentelemetry_sdk::{
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::SystemTime;
-use user_events_exporter::UserEventsExporter;
+use user_events::UserEventsExporter;
 
 struct BenchExporterConfig;
 
