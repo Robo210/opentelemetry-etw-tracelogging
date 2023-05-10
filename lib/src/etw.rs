@@ -151,49 +151,47 @@ impl EtwEventBuilderWrapper {
         links: &mut dyn Iterator<Item = &Link>,
         use_byte_for_bools: bool,
     ) -> ExportResult {
-        if tlg_provider.enabled(level, keywords) {
-            for link in links {
-                self.reset(
-                    event_name,
-                    Level::Verbose,
-                    keywords,
-                    EVENT_TAG_IGNORE_EVENT_TIME,
-                );
-                self.opcode(Opcode::Info);
+        for link in links {
+            self.reset(
+                event_name,
+                level,
+                keywords,
+                EVENT_TAG_IGNORE_EVENT_TIME,
+            );
+            self.opcode(Opcode::Info);
 
-                self.add_filetime(
-                    "otel_event_time",
-                    win_filetime_from_systemtime!(span_timestamp),
-                    OutType::DateTimeUtc,
-                    FIELD_TAG_IS_REAL_EVENT_TIME,
-                );
-                self.add_win32_systemtime("time", &(*span_timestamp).into(), 0);
+            self.add_filetime(
+                "otel_event_time",
+                win_filetime_from_systemtime!(span_timestamp),
+                OutType::DateTimeUtc,
+                FIELD_TAG_IS_REAL_EVENT_TIME,
+            );
+            self.add_win32_systemtime("time", &(*span_timestamp).into(), 0);
 
-                self.add_str8(
-                    "Link",
-                    std::fmt::format(format_args!("{:16x}", link.span_context.span_id())),
-                    OutType::Utf8,
-                    0,
-                );
+            self.add_str8(
+                "Link",
+                std::fmt::format(format_args!("{:16x}", link.span_context.span_id())),
+                OutType::Utf8,
+                0,
+            );
 
-                self.add_attributes_to_event(
-                    &mut link.attributes.iter().map(|kv| (&kv.key, &kv.value)),
-                    use_byte_for_bools,
-                );
+            self.add_attributes_to_event(
+                &mut link.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                use_byte_for_bools,
+            );
 
-                let win32err = self.write(
-                    tlg_provider,
-                    Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
-                    activities
-                        .parent_activity_id
-                        .as_ref()
-                        .and_then(|g| Some(Guid::from_bytes_be(g)))
-                        .as_ref(),
-                );
+            let win32err = self.write(
+                tlg_provider,
+                Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
+                activities
+                    .parent_activity_id
+                    .as_ref()
+                    .and_then(|g| Some(Guid::from_bytes_be(g)))
+                    .as_ref(),
+            );
 
-                if win32err != 0 {
-                    return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
-                }
+            if win32err != 0 {
+                return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
             }
         }
 
@@ -210,63 +208,61 @@ impl EtwEventBuilderWrapper {
         use_byte_for_bools: bool,
         export_payload_as_json: bool,
     ) -> ExportResult {
-        if tlg_provider.enabled(level, keywords) {
-            for event in events {
-                self.reset(
-                    &event.name,
-                    Level::Verbose,
-                    keywords,
-                    EVENT_TAG_IGNORE_EVENT_TIME,
+        for event in events {
+            self.reset(
+                &event.name,
+                level,
+                keywords,
+                EVENT_TAG_IGNORE_EVENT_TIME,
+            );
+            self.opcode(Opcode::Info);
+
+            self.add_filetime(
+                "otel_event_time",
+                win_filetime_from_systemtime!(event.timestamp),
+                OutType::DateTimeUtc,
+                FIELD_TAG_IS_REAL_EVENT_TIME,
+            );
+            self.add_win32_systemtime("time", &event.timestamp.into(), 0);
+
+            self.add_str8("SpanId", &activities.span_id, OutType::Utf8, 0);
+
+            if !activities.parent_span_id.is_empty() {
+                self.add_str8("ParentId", &activities.parent_span_id, OutType::Utf8, 0);
+            }
+
+            self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
+
+            let mut added = false;
+
+            #[cfg(feature = "json")]
+            if export_payload_as_json {
+                let json_string = json::get_attributes_as_json(
+                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
                 );
-                self.opcode(Opcode::Info);
+                self.add_str8("Payload", &json_string, OutType::Json, 0);
+                added = true;
+            }
 
-                self.add_filetime(
-                    "otel_event_time",
-                    win_filetime_from_systemtime!(event.timestamp),
-                    OutType::DateTimeUtc,
-                    FIELD_TAG_IS_REAL_EVENT_TIME,
+            if !added {
+                self.add_attributes_to_event(
+                    &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
+                    use_byte_for_bools,
                 );
-                self.add_win32_systemtime("time", &event.timestamp.into(), 0);
+            }
 
-                self.add_str8("SpanId", &activities.span_id, OutType::Utf8, 0);
+            let win32err = self.write(
+                tlg_provider,
+                Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
+                activities
+                    .parent_activity_id
+                    .as_ref()
+                    .and_then(|g| Some(Guid::from_bytes_be(g)))
+                    .as_ref(),
+            );
 
-                if !activities.parent_span_id.is_empty() {
-                    self.add_str8("ParentId", &activities.parent_span_id, OutType::Utf8, 0);
-                }
-
-                self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
-
-                let mut added = false;
-
-                #[cfg(feature = "json")]
-                if export_payload_as_json {
-                    let json_string = json::get_attributes_as_json(
-                        &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
-                    );
-                    self.add_str8("Payload", &json_string, OutType::Json, 0);
-                    added = true;
-                }
-
-                if !added {
-                    self.add_attributes_to_event(
-                        &mut event.attributes.iter().map(|kv| (&kv.key, &kv.value)),
-                        use_byte_for_bools,
-                    );
-                }
-
-                let win32err = self.write(
-                    tlg_provider,
-                    Some(Guid::from_bytes_be(&activities.activity_id)).as_ref(),
-                    activities
-                        .parent_activity_id
-                        .as_ref()
-                        .and_then(|g| Some(Guid::from_bytes_be(g)))
-                        .as_ref(),
-                );
-
-                if win32err != 0 {
-                    return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
-                }
+            if win32err != 0 {
+                return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
             }
         }
 
@@ -561,54 +557,56 @@ impl std::ops::DerefMut for EtwEventBuilderWrapper {
     }
 }
 
-pub(crate) struct EtwEventExporter {
+pub(crate) struct EtwEventExporter<C: KeywordLevelProvider> {
     provider: Pin<Arc<Provider>>,
+    exporter_config: ExporterConfig<C>,
     bool_representation: InType,
 }
 
-impl EtwEventExporter {
+impl<C: KeywordLevelProvider> EtwEventExporter<C> {
     #[allow(dead_code)]
     pub(crate) fn new(
         provider: Pin<Arc<Provider>>,
+        exporter_config: ExporterConfig<C>,
         bool_representation: InType,
-    ) -> EtwEventExporter {
+    ) -> Self {
         // Unfortunately we can't safely share a cached EventBuilder without adding undesirable locking
         EtwEventExporter {
             provider,
+            exporter_config,
             bool_representation,
         }
     }
 }
 
-impl EventExporter for EtwEventExporter {
+impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
     fn enabled(&self, level: u8, keyword: u64) -> bool {
         self.provider.enabled(level.into(), keyword)
     }
 
     // Called by the real-time exporter when a span is started
-    fn log_span_start<C, S>(&self, provider: &ExporterConfig<C>, span: &S) -> ExportResult
+    fn log_span_start<S>(&self, span: &S) -> ExportResult
     where
-        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
-        if !provider.get_export_span_events() {
+        if !self.exporter_config.get_export_span_events() {
             // Common schema events are logged at span end
             return Ok(());
         }
 
-        let span_keywords = provider.get_span_keywords();
+        let span_keywords = self.exporter_config.get_span_keywords();
+        let span_level = self.exporter_config.get_span_level().into();
 
-        if !self.provider.enabled(Level::Informational, span_keywords) {
+        if !self.provider.enabled(span_level, span_keywords) {
             return Ok(());
         }
 
-        let links_keywords = provider.get_links_keywords();
         let use_byte_for_bools = match self.bool_representation {
             InType::U8 => true,
             InType::Bool32 => false,
             _ => panic!("unsupported bool representation"),
         };
-        let export_payload_as_json = provider.get_export_as_json();
+        let export_payload_as_json = self.exporter_config.get_export_as_json();
 
         let span_context = opentelemetry_api::trace::Span::span_context(span);
 
@@ -626,7 +624,7 @@ impl EventExporter for EtwEventExporter {
             ebw.write_span_event(
                 &self.provider.as_ref(),
                 &span_data.name,
-                Level::Informational,
+                span_level,
                 span_keywords,
                 &activities,
                 &span_data.start_time,
@@ -639,43 +637,48 @@ impl EventExporter for EtwEventExporter {
                 export_payload_as_json,
             )?;
 
-            ebw.write_span_links(
-                &self.provider.as_ref(),
-                Level::Verbose,
-                links_keywords,
-                &activities,
-                &span_data.name,
-                &span_data.start_time,
-                &mut span_data.links.iter(),
-                use_byte_for_bools,
-            )?;
+            let links_keywords = self.exporter_config.get_links_keywords();
+            let links_level = self.exporter_config.get_links_level().into();
+
+            if self.provider.enabled(links_level, links_keywords) {
+                ebw.write_span_links(
+                    &self.provider.as_ref(),
+                    links_level,
+                    links_keywords,
+                    &activities,
+                    &span_data.name,
+                    &span_data.start_time,
+                    &mut span_data.links.iter(),
+                    use_byte_for_bools,
+                )?;
+            }
 
             Ok(())
         })
     }
 
     // Called by the real-time exporter when a span is ended
-    fn log_span_end<C, S>(&self, provider: &ExporterConfig<C>, span: &S) -> ExportResult
+    fn log_span_end<S>(&self, span: &S) -> ExportResult
     where
-        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
-        let span_keywords = provider.get_span_keywords();
-        //let event_keywords = provider.get_event_keywords();
+        let span_keywords = self.exporter_config.get_span_keywords();
+        let span_level = self.exporter_config.get_span_level().into();
+
         let use_byte_for_bools = match self.bool_representation {
             InType::U8 => true,
             InType::Bool32 => false,
             _ => panic!("unsupported bool representation"),
         };
-        let export_payload_as_json = provider.get_export_as_json();
+        let export_payload_as_json = self.exporter_config.get_export_as_json();
 
         let span_data = span.get_span_data();
 
         EBW.with(|ebw| {
             let mut ebw = ebw.borrow_mut();
 
-            if self.provider.enabled(Level::Informational, span_keywords)
-                && provider.get_export_span_events()
+            if self.provider.enabled(span_level, span_keywords)
+                && self.exporter_config.get_export_span_events()
             {
                 let activities = Activities::generate(
                     &span_data.span_context.span_id(),
@@ -686,7 +689,7 @@ impl EventExporter for EtwEventExporter {
                 ebw.write_span_event(
                     &self.provider.as_ref(),
                     &span_data.name,
-                    Level::Informational,
+                    span_level,
                     span_keywords,
                     &activities,
                     &span_data.end_time,
@@ -700,14 +703,14 @@ impl EventExporter for EtwEventExporter {
                 )?;
             }
 
-            if self.provider.enabled(Level::Informational, span_keywords)
-                && provider.get_export_common_schema_event()
+            if self.provider.enabled(span_level, span_keywords)
+                && self.exporter_config.get_export_common_schema_event()
             {
                 let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
                 ebw.write_common_schema_span(
                     &self.provider.as_ref(),
                     &span_data.name,
-                    Level::Informational,
+                    span_level,
                     span_keywords,
                     span_data,
                     span.span_context(),
@@ -721,20 +724,19 @@ impl EventExporter for EtwEventExporter {
     }
 
     // Called by the real-time exporter when an event is added to a span
-    fn log_span_event<C, S>(
+    fn log_span_event<S>(
         &self,
-        provider: &ExporterConfig<C>,
         event: opentelemetry_api::trace::Event,
         span: &S,
     ) -> ExportResult
     where
-        C: KeywordLevelProvider,
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
-        let event_keywords = provider.get_event_keywords();
+        let event_keywords = self.exporter_config.get_event_keywords();
+        let event_level = self.exporter_config.get_event_level().into();
 
-        if !self.provider.enabled(Level::Informational, event_keywords)
-            || !provider.get_export_span_events()
+        if !self.provider.enabled(event_level, event_keywords)
+            || !self.exporter_config.get_export_span_events()
         {
             // TODO: Common Schema PartB SpanEvent events
             return Ok(());
@@ -745,7 +747,7 @@ impl EventExporter for EtwEventExporter {
             InType::Bool32 => false,
             _ => panic!("unsupported bool representation"),
         };
-        let export_payload_as_json = provider.get_export_as_json();
+        let export_payload_as_json = self.exporter_config.get_export_as_json();
         let span_data = span.get_span_data();
 
         let activities = Activities::generate(
@@ -759,7 +761,7 @@ impl EventExporter for EtwEventExporter {
 
             ebw.reset(
                 &event.name,
-                Level::Verbose,
+                event_level,
                 event_keywords,
                 EVENT_TAG_IGNORE_EVENT_TIME,
             );
@@ -818,19 +820,16 @@ impl EventExporter for EtwEventExporter {
     }
 
     // Called by the batch exporter sometime after span is completed
-    fn log_span_data<C>(&self, provider: &ExporterConfig<C>, span_data: &SpanData) -> ExportResult
-    where
-        C: KeywordLevelProvider,
+    fn log_span_data(&self, span_data: &SpanData) -> ExportResult
     {
-        let span_keywords = provider.get_span_keywords();
-        let event_keywords = provider.get_event_keywords();
-        let links_keywords = provider.get_links_keywords();
+        let span_keywords = self.exporter_config.get_span_keywords();
+
         let use_byte_for_bools = match self.bool_representation {
             InType::U8 => true,
             InType::Bool32 => false,
             _ => panic!("unsupported bool representation"),
         };
-        let export_payload_as_json = provider.get_export_as_json();
+        let export_payload_as_json = self.exporter_config.get_export_as_json();
 
         let level = match span_data.status {
             Status::Ok => Level::Informational,
@@ -842,7 +841,7 @@ impl EventExporter for EtwEventExporter {
             let mut ebw = ebw.borrow_mut();
             let mut err = Ok(());
 
-            if self.provider.enabled(level, span_keywords) && provider.get_export_span_events() {
+            if self.provider.enabled(level, span_keywords) && self.exporter_config.get_export_span_events() {
                 let activities = Activities::generate(
                     &span_data.span_context.span_id(),
                     &span_data.parent_span_id,
@@ -866,27 +865,41 @@ impl EventExporter for EtwEventExporter {
                         export_payload_as_json,
                     )
                     .and_then(|_| {
-                        ebw.write_span_events(
-                            &self.provider.as_ref(),
-                            Level::Verbose,
-                            event_keywords,
-                            &activities,
-                            &mut span_data.events.iter(),
-                            use_byte_for_bools,
-                            export_payload_as_json,
-                        )
+                        let event_keywords = self.exporter_config.get_event_keywords();
+                        let event_level = self.exporter_config.get_event_level().into();
+
+                        if self.provider.enabled(event_level, event_keywords) {
+                            ebw.write_span_events(
+                                &self.provider.as_ref(),
+                                event_level,
+                                event_keywords,
+                                &activities,
+                                &mut span_data.events.iter(),
+                                use_byte_for_bools,
+                                export_payload_as_json,
+                            )
+                        } else {
+                            Ok(())
+                        }
                     })
                     .and_then(|_| {
-                        ebw.write_span_links(
-                            &self.provider.as_ref(),
-                            Level::Verbose,
-                            links_keywords,
-                            &activities,
-                            &span_data.name,
-                            &span_data.start_time,
-                            &mut span_data.links.iter(),
-                            use_byte_for_bools,
-                        )
+                        let links_keywords = self.exporter_config.get_links_keywords();
+                        let links_level = self.exporter_config.get_links_level().into();
+
+                        if self.provider.enabled(links_level, links_keywords) {
+                            ebw.write_span_links(
+                                &self.provider.as_ref(),
+                                links_level,
+                                links_keywords,
+                                &activities,
+                                &span_data.name,
+                                &span_data.start_time,
+                                &mut span_data.links.iter(),
+                                use_byte_for_bools,
+                            )
+                        } else {
+                            Ok(())
+                        }
                     })
                     .and_then(|_| {
                         ebw.write_span_event(
@@ -908,7 +921,7 @@ impl EventExporter for EtwEventExporter {
             }
 
             if self.provider.enabled(Level::Informational, span_keywords)
-                && provider.get_export_common_schema_event()
+                && self.exporter_config.get_export_common_schema_event()
             {
                 let attributes = span_data.attributes.iter(); //.chain(span_data.resource.iter());
 

@@ -31,7 +31,7 @@ pub(crate) enum ProviderGroup {
     Linux(Cow<'static, str>),
 }
 
-/// Create a new exporter builder by calling [`ExporterBuilder::new'].
+/// Create a new exporter builder by calling [`new_exporter`].
 pub struct ExporterBuilder {
     provider_name: String,
     provider_id: Guid,
@@ -97,7 +97,7 @@ impl ExporterBuilder {
     /// Override the default keywords and levels for events.
     /// Provide an implementation of the [`KeywordLevelProvider`] trait that will
     /// return the desired keywords and level values for each type of event.
-    pub fn with_exporter_config(mut self, config: impl KeywordLevelProvider + 'static) -> Self {
+    pub fn with_custom_keywords_levels(mut self, config: impl KeywordLevelProvider + 'static) -> Self {
         self.exporter_config = Some(Box::new(config));
         self
     }
@@ -122,8 +122,8 @@ impl ExporterBuilder {
     /// may perform worse.
     /// These events are emitted in addition to the normal ETW events,
     /// unless `without_realtime_events` is also called.
-    /// Common Schema events take longer to generate, and should only be
-    /// used with the Batch Exporter.
+    /// Common Schema events are much slower to generate and should not be enabled
+    /// unless absolutely necessary.
     pub fn with_common_schema_events(mut self) -> Self {
         self.emit_common_schema_events = true;
         self
@@ -373,13 +373,11 @@ impl ExporterBuilder {
             }
         }
 
-        global::tracer_provider().versioned_tracer(
+        global::tracer_provider().tracer(
             #[cfg(all(target_os = "windows"))]
             "opentelemetry-etw",
             #[cfg(all(target_os = "linux"))]
-            "opentelemetry-user_events",
-            Some(env!("CARGO_PKG_VERSION")),
-            Some("https://microsoft.com/etw"),
+            "opentelemetry-user_events"
         )
     }
 }

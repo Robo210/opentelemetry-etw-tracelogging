@@ -1,7 +1,9 @@
 use crate::builder::ProviderGroup;
 #[allow(unused_imports)]
 use crate::etw::*;
-use crate::exporter_traits::*;
+#[allow(unused_imports)]
+use crate::user_events;
+use crate::{exporter_traits::*};
 #[allow(unused_imports)]
 use crate::user_events::*;
 use futures_util::future::BoxFuture;
@@ -9,13 +11,12 @@ use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
 use std::fmt::Debug;
 use std::sync::Arc;
 
-pub(crate) struct BatchExporter<C: KeywordLevelProvider, E: EventExporter + Send + Sync> {
-    config: ExporterConfig<C>,
+pub(crate) struct BatchExporter<E: EventExporter + Send + Sync> {
     ebw: E,
 }
 
 #[cfg(all(target_os = "windows"))]
-impl<C: KeywordLevelProvider> BatchExporter<C, EtwEventExporter> {
+impl<C: KeywordLevelProvider> BatchExporter<EtwEventExporter<C>> {
     pub(crate) fn new(
         provider_name: &str,
         provider_group: ProviderGroup,
@@ -32,9 +33,9 @@ impl<C: KeywordLevelProvider> BatchExporter<C, EtwEventExporter> {
             provider.as_ref().register();
         }
         BatchExporter {
-            config: exporter_config,
             ebw: EtwEventExporter::new(
                 provider,
+                exporter_config,
                 if use_byte_for_bools {
                     tracelogging::InType::U8
                 } else {
@@ -46,7 +47,7 @@ impl<C: KeywordLevelProvider> BatchExporter<C, EtwEventExporter> {
 }
 
 #[cfg(all(target_os = "linux"))]
-impl<C: KeywordLevelProvider> BatchExporter<C, UserEventsExporter> {
+impl<C: KeywordLevelProvider> BatchExporter<UserEventsExporter<C>> {
     pub(crate) fn new(
         provider_name: &str,
         provider_group: ProviderGroup,
@@ -58,79 +59,24 @@ impl<C: KeywordLevelProvider> BatchExporter<C, UserEventsExporter> {
             options = *options.group_name(&name);
         }
         let mut provider = eventheader_dynamic::Provider::new(provider_name, &options);
-
-        #[cfg(not(test))]
-        {
-            // Standard real-time level/keyword pairs
-            provider.register_set(
-                eventheader::Level::Informational,
-                exporter_config.get_span_keywords(),
-            );
-            provider.register_set(
-                eventheader::Level::Verbose,
-                exporter_config.get_event_keywords(),
-            );
-            provider.register_set(
-                eventheader::Level::Verbose,
-                exporter_config.get_links_keywords(),
-            );
-
-            // Common Schema events use a level based on a span's Status
-            provider.register_set(eventheader::Level::Error, exporter_config.get_span_keywords());
-            provider.register_set(
-                eventheader::Level::Verbose,
-                exporter_config.get_span_keywords(),
-            );
-        }
-        #[cfg(test)]
-        {
-            // Standard real-time level/keyword pairs
-            provider.create_unregistered(
-                true,
-                eventheader::Level::Informational,
-                exporter_config.get_span_keywords(),
-            );
-            provider.create_unregistered(
-                true,
-                eventheader::Level::Verbose,
-                exporter_config.get_event_keywords(),
-            );
-            provider.create_unregistered(
-                true,
-                eventheader::Level::Verbose,
-                exporter_config.get_links_keywords(),
-            );
-
-            // Common Schema events use a level based on a span's Status
-            provider.create_unregistered(
-                true,
-                eventheader::Level::Error,
-                exporter_config.get_span_keywords(),
-            );
-            provider.create_unregistered(
-                true,
-                eventheader::Level::Verbose,
-                exporter_config.get_span_keywords(),
-            );
-        }
+        user_events::register_eventsets(&mut provider, &exporter_config);
 
         BatchExporter {
-            config: exporter_config,
-            ebw: UserEventsExporter::new(Arc::new(provider)),
+            ebw: UserEventsExporter::new(Arc::new(provider), exporter_config),
         }
     }
 }
 
-impl<C: KeywordLevelProvider, E: EventExporter + Send + Sync> Debug for BatchExporter<C, E> {
+impl<E: EventExporter + Send + Sync> Debug for BatchExporter<E> {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
 
-impl<C: KeywordLevelProvider, E: EventExporter + Send + Sync> SpanExporter for BatchExporter<C, E> {
+impl<E: EventExporter + Send + Sync> SpanExporter for BatchExporter<E> {
     fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
         for span in batch {
-            let _ = self.ebw.log_span_data(&self.config, &span);
+            let _ = self.ebw.log_span_data(&span);
         }
 
         Box::pin(std::future::ready(Ok(())))

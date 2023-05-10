@@ -36,6 +36,15 @@ impl KeywordLevelProvider for BenchExporterConfig {
     fn get_links_keywords(&self) -> u64 {
         4
     }
+    fn get_span_level(&self) -> u8 {
+        4 // Level::Informational
+    }
+    fn get_event_level(&self) -> u8 {
+        5 // Level::Verbose
+    }
+    fn get_links_level(&self) -> u8 {
+        5 // Level::Verbose
+    }
 }
 
 #[cfg(all(target_os = "linux"))]
@@ -77,37 +86,52 @@ pub fn user_events_benchmark(c: &mut Criterion) {
         instrumentation_lib,
     };
 
-    let exporter = UserEventsExporter::new(Arc::new(provider));
-    let mut config = ExporterConfig {
-        kwl: BenchExporterConfig,
-        json: false,
-        common_schema: false,
-        etw_activities: false,
-    };
-
     let mut group = c.benchmark_group("export span_data");
 
-    group.bench_function("provider disabled", |b| {
-        b.iter(|| (exporter.log_span_data(&config, &span_data)))
-    });
+    let provider = Arc::new(provider);
 
-    config.common_schema = true;
+    group.bench_function("provider disabled", |b| {
+        let config = ExporterConfig {
+            kwl: BenchExporterConfig,
+            json: false,
+            common_schema: false,
+            etw_activities: false,
+        };
+        let exporter = UserEventsExporter::new(provider.clone(), config);
+        b.iter(|| (exporter.log_span_data(&span_data)))
+    });
 
     group.bench_function("provider enabled/cs4", |b| {
-        b.iter(|| (exporter.log_span_data(&config, &span_data)))
+        let config = ExporterConfig {
+            kwl: BenchExporterConfig,
+            json: false,
+            common_schema: true,
+            etw_activities: false,
+        };
+        let exporter = UserEventsExporter::new(provider.clone(), config);
+        b.iter(|| (exporter.log_span_data(&span_data)))
     });
-
-    config.common_schema = false;
-    config.etw_activities = true;
 
     group.bench_function("provider enabled/span", |b| {
-        b.iter(|| (exporter.log_span_data(&config, &span_data)))
+        let config = ExporterConfig {
+            kwl: BenchExporterConfig,
+            json: false,
+            common_schema: false,
+            etw_activities: true,
+        };
+        let exporter = UserEventsExporter::new(provider.clone(), config);
+        b.iter(|| (exporter.log_span_data(&span_data)))
     });
 
-    config.common_schema = true;
-
     group.bench_function("provider enabled/cs4+span", |b| {
-        b.iter(|| (exporter.log_span_data(&config, &span_data)))
+        let config = ExporterConfig {
+            kwl: BenchExporterConfig,
+            json: false,
+            common_schema: true,
+            etw_activities: true,
+        };
+        let exporter = UserEventsExporter::new(provider.clone(), config);
+        b.iter(|| (exporter.log_span_data(&span_data)))
     });
 }
 

@@ -1,7 +1,7 @@
 [package]
 name = "test-opentelemetry-etw"
 description = "Sample app for OpenTelemetry-Rust Trace Span Exporter to ETW and Linux user_events"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.69"
@@ -11,7 +11,7 @@ authors = ["Kyle Sabo"]
 opentelemetry = {workspace = true}
 opentelemetry_api = {workspace = true}
 opentelemetry_sdk = {version="0.18", features=["rt-tokio"]}
-opentelemetry-etw-user_events = {version="0.2", path="../lib", features=["json", "rt-tokio"]}
+opentelemetry-etw-user_events = {version="0.3", path="../lib", features=["json", "rt-tokio"]}
 tokio = "1.0"
 
 [[bin]]
