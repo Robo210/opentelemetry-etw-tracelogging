@@ -46,14 +46,14 @@ impl<C: KeywordLevelProvider> BatchExporter<C, EtwEventExporter> {
 }
 
 #[cfg(all(target_os = "linux"))]
-impl<C: KeywordLevelProvider> BatchExporter<ExporterConfig<C>, UserEventsExporter> {
+impl<C: KeywordLevelProvider> BatchExporter<C, UserEventsExporter> {
     pub(crate) fn new(
         provider_name: &str,
         provider_group: ProviderGroup,
         _use_byte_for_bools: bool,
-        exporter_config: C,
+        exporter_config: ExporterConfig<C>,
     ) -> Self {
-        let mut options = linux_tld::Provider::options();
+        let mut options = linux_tld::Provider::new_options();
         if let ProviderGroup::Linux(ref name) = provider_group {
             options = *options.group_name(&name);
         }
@@ -114,12 +114,10 @@ impl<C: KeywordLevelProvider> BatchExporter<ExporterConfig<C>, UserEventsExporte
             );
         }
 
-        let exporter = BatchExporter {
+        BatchExporter {
             config: exporter_config,
             ebw: UserEventsExporter::new(Arc::new(provider)),
-        };
-
-        exporter
+        }
     }
 }
 

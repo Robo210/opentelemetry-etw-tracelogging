@@ -284,15 +284,15 @@ impl<C: KeywordLevelProvider> RealtimeTracerProvider<C, EtwEventExporter> {
 }
 
 #[cfg(all(target_os = "linux"))]
-impl<C: ExporterConfig + KeywordLevelProvider> RealtimeTracerProvider<C, UserEventsExporter> {
+impl<C: KeywordLevelProvider> RealtimeTracerProvider<C, UserEventsExporter> {
     pub(crate) fn new(
         provider_name: &str,
         provider_group: ProviderGroup,
         otel_config: opentelemetry_sdk::trace::Config,
         _use_byte_for_bools: bool,
-        exporter_config: C,
+        exporter_config: ExporterConfig<C>,
     ) -> Self {
-        let mut options = linux_tld::Provider::options();
+        let mut options = linux_tld::Provider::new_options();
         if let ProviderGroup::Linux(ref name) = provider_group {
             options = *options.group_name(&name);
         }

@@ -1,5 +1,5 @@
 #[cfg(test)]
-#[allow(dead_code, non_upper_case_globals)]
+#[allow(dead_code, non_upper_case_globals, unused_imports)]
 mod functional {
     use std::ffi::c_void;
 

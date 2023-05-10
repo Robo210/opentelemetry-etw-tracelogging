@@ -21,8 +21,8 @@ default = []
 [dependencies]
 tracelogging = ">= 1.1.0"
 tracelogging_dynamic = ">= 1.1.0"
-linux_tlg = {version="0.1", path="../../LinuxTracePoints/rust/eventheader", package="eventheader"}
-linux_tld = {version="0.1", path="../../LinuxTracePoints/rust/eventheader_dynamic", package="eventheader_dynamic"}
+linux_tlg = {version="0.1", package="eventheader"}
+linux_tld = {version="0.1", package="eventheader_dynamic"}
 opentelemetry = {workspace = true}
 opentelemetry_api = {workspace = true}
 opentelemetry_sdk = "0.18"
@@ -40,7 +40,7 @@ crossbeam-channel = "0.5"
 tokio = {version="1.0", features=["full"]}
 rsevents = "0.3"
 criterion = {version="0.4", features=["html_reports"]}
-etw_helpers = {version="0.1", path="../../etw_helpers"}
+etw_helpers = {version="0.1", path="../../etw/rust/etw_helpers"}
 
 [[bench]]
 name = "etw"
