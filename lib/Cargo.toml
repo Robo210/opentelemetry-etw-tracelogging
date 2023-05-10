@@ -1,12 +1,12 @@
 [package]
-name = "opentelemetry-etw"
+name = "opentelemetry-etw-user_events"
 description = "OpenTelemetry-Rust Trace Span Exporter to ETW and user_events"
 version = "0.2.0"
 edition = "2021"
 resolver = "2"
 license = "MIT"
 repository = "https://github.com/Robo210/opentelemetry-etw-tracelogging"
-rust-version = "1.67"
+rust-version = "1.69"
 authors = ["Kyle Sabo", "Microsoft"]
 
 [features]
@@ -21,11 +21,11 @@ default = []
 [dependencies]
 tracelogging = ">= 1.1.0"
 tracelogging_dynamic = ">= 1.1.0"
-linux_tlg = {version="0.1", package="eventheader"}
-linux_tld = {version="0.1", package="eventheader_dynamic"}
+eventheader = "0.1"
+eventheader_dynamic = "0.1"
 opentelemetry = {workspace = true}
 opentelemetry_api = {workspace = true}
-opentelemetry_sdk = "0.18"
+opentelemetry_sdk = {workspace = true}
 futures-util = "0.3"
 chrono = {version="0.4", default-features = false, features=["std"]}
 serde = {version = "1.0", optional=true}
@@ -34,7 +34,7 @@ tokio = {version="1.0", optional=true, features=["rt-multi-thread", "rt"]}
 async-std = {version="1.6", optional=true}
 
 [dev-dependencies]
-windows = {version="0.48.0", features=["Win32_System_Diagnostics_Etw", "Win32_Foundation", "Win32_System_Time"]}
+windows = {version="0.48", features=["Win32_System_Diagnostics_Etw", "Win32_Foundation", "Win32_System_Time"]}
 futures = "0.3"
 crossbeam-channel = "0.5"
 tokio = {version="1.0", features=["full"]}

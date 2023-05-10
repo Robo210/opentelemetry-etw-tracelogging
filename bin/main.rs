@@ -2,7 +2,7 @@ use opentelemetry::trace::{Link, TraceContextExt};
 use opentelemetry::Key;
 use opentelemetry_api::global::shutdown_tracer_provider;
 use opentelemetry_api::trace::{Span, Tracer};
-use opentelemetry_etw as otel_etw;
+use opentelemetry_etw_user_events as otel_etw;
 use otel_etw::span_exporter::EtwExporterAsyncRuntime;
 
 const SAMPLE_KEY_STR: Key = Key::from_static_str("str");

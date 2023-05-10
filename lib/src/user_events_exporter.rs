@@ -1,5 +1,5 @@
-use linux_tld::{EventBuilder, EventSet};
-use linux_tlg::{FieldFormat, Level, Opcode};
+use eventheader_dynamic::{EventBuilder, EventSet};
+use eventheader::{FieldFormat, Level, Opcode};
 use opentelemetry::{
     trace::{Event, Link, SpanContext, SpanId, SpanKind, Status, TraceError},
     Array, Key, Value,
@@ -12,12 +12,12 @@ use crate::{constants::*, error::*, exporter_traits::*, json};
 thread_local! {static EBW: RefCell<EventBuilder> = RefCell::new(EventBuilder::new());}
 
 pub(crate) struct UserEventsExporter {
-    provider: Arc<linux_tld::Provider>,
+    provider: Arc<eventheader_dynamic::Provider>,
 }
 
 impl UserEventsExporter {
     #[allow(dead_code)]
-    pub(crate) fn new(provider: Arc<linux_tld::Provider>) -> UserEventsExporter {
+    pub(crate) fn new(provider: Arc<eventheader_dynamic::Provider>) -> UserEventsExporter {
         // Unfortunately we can't safely share a cached EventBuilder without adding undesirable locking
         UserEventsExporter { provider }
     }

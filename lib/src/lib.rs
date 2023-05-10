@@ -1,17 +1,18 @@
-//! # TraceLogging Span Exporter
+//! # TraceLogging-style Span Exporter for ETW and Linux user_events
 //!
 //! ## Overview
 //!
-//! The TraceLogging Span Exporter exports Spans and Traces (soon) as
-//! Windows ETW events or Linux user-mode tracepoints (user_events; requires a Linux 6.4+
-//! kernel) events with TraceLogging-like encoding.
+//! This span exporter exports OpenTelemetry Spans as
+//! Windows ETW events or Linux user-mode tracepoints (user_events with the 
+//! [EventHeader](https://github.com/microsoft/LinuxTracepoints/tree/main/libeventheader-tracepoint)
+//! encoding; requires a Linux 6.4+ kernel).
 //! *Note*: Linux kernels without user_events support will not log any events.
 //!
 //! ### ETW
 //!
 //! ETW is a Windows-specific system wide, high performance, lossy tracing API built into the
 //! Windows kernel. Turning Spans into ETW events (activities) can allow a user to
-//! the correlate the Span to other system activity, such as disk IO, memory allocations,
+//! then correlate the Span to other system activity, such as disk IO, memory allocations,
 //! sample profiling, network activity, or any other event logged by the thousands of
 //! ETW providers built into Windows and 3rd party software and drivers.
 //!
@@ -34,6 +35,13 @@
 //! is new to the Linux kernel starting with version 6.4. For the purposes of this exporter,
 //! its functionality is nearly identical to ETW. Any differences between the two will be explicitly
 //! called out in these docs.
+//! 
+//! The [perf](https://perf.wiki.kernel.org/index.php/Tutorial) tool can be used on Linux to
+//! collect user_events events to a file on disk that can then be processed into a readable
+//! format. Because these events are encoded in the new [EventHeader](https://github.com/microsoft/LinuxTracepoints/)
+//! format, you will need a tool that understands this encoding to process the perf.dat file.
+//! The [decode_perf](https://github.com/microsoft/LinuxTracepoints/tree/main/libeventheader-decode-cpp)
+//! sample tool can be used to do this currently; in the future support will be added to additional tools.
 //!
 //! ## Realtime Events
 //!
@@ -51,7 +59,8 @@
 //! ## Common Schema 4.0 Events
 //!
 //! Common Schema 4.0 events are for advanced scenarios, when the event consumer
-//! requires events in this schema. Spans are exported asynchronously
+//! requires events in this schema. If you are unfamiliar with Common Schema,
+//! then you do not want to enable this. Spans are exported asynchronously
 //! and in batches. Because of this, the timestamps on the ETW events do not
 //! represent the time the span was originally started or ended.
 //!
@@ -113,11 +122,6 @@
 //! - The C++ exporter supports logs from the the OpenTelemetry Logging API proposal.
 //! This is not (yet) supported by OpenTelemetry-Rust.
 //! - The C++ exporter does not (currently) use opcodes or levels on its ETW events.
-//! - The C++ exporter and Rust exporter use different algorithms to generate activity IDs from span IDs.
-//! This should not be noticeable as span IDs and activity IDs should always be unique.
-//!   - The C++ exporter (currently) copies the 8-byte span ID into the 16-byte activity ID GUID, leaving the
-//!   remaining 8 bytes empty. This makes the GUID non-compliant, and the uniqueness guarantees of a GUID/LUID
-//!   cannot be applied to activities IDs generated in this way.
 mod batch_exporter;
 mod builder;
 mod constants;

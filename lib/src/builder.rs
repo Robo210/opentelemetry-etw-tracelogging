@@ -187,7 +187,7 @@ impl ExporterBuilder {
             }
             ProviderGroup::Linux(name) => {
                 assert!(
-                    linux_tld::ProviderOptions::is_valid_option_value(&name),
+                    eventheader_dynamic::ProviderOptions::is_valid_option_value(&name),
                     "Provider names must be lower case ASCII or numeric digits"
                 );
             }
@@ -198,8 +198,9 @@ impl ExporterBuilder {
             .provider_name
             .contains(|f: char| !f.is_ascii_alphanumeric())
         {
-            // The perf command is very particular about the provider names it accepts
-            panic!("Linux provider names must be ASCII alphanumeric");
+            // The perf command is very particular about the provider names it accepts.
+            // The Linux kernel itself cares less, and other event consumers should also presumably not need this check.
+            //panic!("Linux provider names must be ASCII alphanumeric");
         }
     }
 

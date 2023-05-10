@@ -41,16 +41,16 @@ impl KeywordLevelProvider for BenchExporterConfig {
 #[cfg(all(target_os = "linux"))]
 pub fn user_events_benchmark(c: &mut Criterion) {
     let mut provider =
-        linux_tld::Provider::new("otel_bench", &linux_tld::ProviderOptions::default());
+        eventheader_dynamic::Provider::new("otel_bench", &eventheader_dynamic::ProviderOptions::default());
 
     // Standard real-time level/keyword pairs
-    provider.create_unregistered(true, linux_tlg::Level::Informational, 1);
-    provider.create_unregistered(true, linux_tlg::Level::Verbose, 2);
-    provider.create_unregistered(true, linux_tlg::Level::Verbose, 4);
+    provider.create_unregistered(true, eventheader::Level::Informational, 1);
+    provider.create_unregistered(true, eventheader::Level::Verbose, 2);
+    provider.create_unregistered(true, eventheader::Level::Verbose, 4);
 
     // Common Schema events use a level based on a span's Status
-    provider.create_unregistered(true, linux_tlg::Level::Error, 1);
-    provider.create_unregistered(true, linux_tlg::Level::Verbose, 1);
+    provider.create_unregistered(true, eventheader::Level::Error, 1);
+    provider.create_unregistered(true, eventheader::Level::Verbose, 1);
 
     let instrumentation_lib = InstrumentationLibrary::new(Cow::Borrowed("bench"), None, None);
 

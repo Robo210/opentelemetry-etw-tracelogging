@@ -53,32 +53,32 @@ impl<C: KeywordLevelProvider> BatchExporter<C, UserEventsExporter> {
         _use_byte_for_bools: bool,
         exporter_config: ExporterConfig<C>,
     ) -> Self {
-        let mut options = linux_tld::Provider::new_options();
+        let mut options = eventheader_dynamic::Provider::new_options();
         if let ProviderGroup::Linux(ref name) = provider_group {
             options = *options.group_name(&name);
         }
-        let mut provider = linux_tld::Provider::new(provider_name, &options);
+        let mut provider = eventheader_dynamic::Provider::new(provider_name, &options);
 
         #[cfg(not(test))]
         {
             // Standard real-time level/keyword pairs
             provider.register_set(
-                linux_tlg::Level::Informational,
+                eventheader::Level::Informational,
                 exporter_config.get_span_keywords(),
             );
             provider.register_set(
-                linux_tlg::Level::Verbose,
+                eventheader::Level::Verbose,
                 exporter_config.get_event_keywords(),
             );
             provider.register_set(
-                linux_tlg::Level::Verbose,
+                eventheader::Level::Verbose,
                 exporter_config.get_links_keywords(),
             );
 
             // Common Schema events use a level based on a span's Status
-            provider.register_set(linux_tlg::Level::Error, exporter_config.get_span_keywords());
+            provider.register_set(eventheader::Level::Error, exporter_config.get_span_keywords());
             provider.register_set(
-                linux_tlg::Level::Verbose,
+                eventheader::Level::Verbose,
                 exporter_config.get_span_keywords(),
             );
         }
@@ -87,29 +87,29 @@ impl<C: KeywordLevelProvider> BatchExporter<C, UserEventsExporter> {
             // Standard real-time level/keyword pairs
             provider.create_unregistered(
                 true,
-                linux_tlg::Level::Informational,
+                eventheader::Level::Informational,
                 exporter_config.get_span_keywords(),
             );
             provider.create_unregistered(
                 true,
-                linux_tlg::Level::Verbose,
+                eventheader::Level::Verbose,
                 exporter_config.get_event_keywords(),
             );
             provider.create_unregistered(
                 true,
-                linux_tlg::Level::Verbose,
+                eventheader::Level::Verbose,
                 exporter_config.get_links_keywords(),
             );
 
             // Common Schema events use a level based on a span's Status
             provider.create_unregistered(
                 true,
-                linux_tlg::Level::Error,
+                eventheader::Level::Error,
                 exporter_config.get_span_keywords(),
             );
             provider.create_unregistered(
                 true,
-                linux_tlg::Level::Verbose,
+                eventheader::Level::Verbose,
                 exporter_config.get_span_keywords(),
             );
         }

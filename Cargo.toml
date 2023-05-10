@@ -5,4 +5,4 @@ resolver = "2"
 [workspace.dependencies]
 opentelemetry = "0.18"
 opentelemetry_api = {version="0.18", default-features = false, features=["trace"]}
-opentelemetry-etw = { path = "lib" }
+opentelemetry_sdk = "0.18"
