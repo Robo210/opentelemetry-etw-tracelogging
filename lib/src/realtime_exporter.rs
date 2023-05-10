@@ -1,9 +1,9 @@
 use crate::builder::ProviderGroup;
 #[allow(unused_imports)]
-use crate::etw_exporter::*;
+use crate::etw::*;
 use crate::exporter_traits::*;
 #[allow(unused_imports)]
-use crate::user_events_exporter::*;
+use crate::user_events::*;
 use opentelemetry::InstrumentationLibrary;
 use opentelemetry::{
     trace::{
