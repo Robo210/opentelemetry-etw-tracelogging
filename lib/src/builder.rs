@@ -23,13 +23,15 @@ pub enum EtwExporterAsyncRuntime {
     AsyncStd,
 }
 
-pub enum ProviderGroup {
+pub(crate) enum ProviderGroup {
     Unset,
+    #[allow(dead_code)]
     Windows(Guid),
+    #[allow(dead_code)]
     Linux(Cow<'static, str>),
 }
 
-//#[derive(Debug)]
+/// Create a new exporter builder by calling [`ExporterBuilder::new'].
 pub struct ExporterBuilder {
     provider_name: String,
     provider_id: Guid,
@@ -139,13 +141,15 @@ impl ExporterBuilder {
 
     /// For advanced scenarios.
     /// Set the ETW provider group to join this provider to.
-    #[cfg(all(target_os = "windows"))]
+    #[cfg(any(target_os = "windows", doc))]
     pub fn with_provider_group(mut self, group_id: Guid) -> Self {
         self.provider_group = ProviderGroup::Windows(group_id);
         self
     }
 
-    #[cfg(all(target_os = "linux"))]
+    /// For advanced scenarios.
+    /// Set the EventHeader provider group to join this provider to.
+    #[cfg(any(target_os = "linux", doc))]
     pub fn with_provider_group(mut self, name: &str) -> Self {
         self.provider_group = ProviderGroup::Linux(Cow::Owned(name.to_owned()));
         self
@@ -158,7 +162,8 @@ impl ExporterBuilder {
     #[cfg(any(
         feature = "rt-tokio",
         feature = "rt-tokio-current-thread",
-        feature = "rt-async-std"
+        feature = "rt-async-std",
+        doc
     ))]
     pub fn with_async_runtime(mut self, runtime: EtwExporterAsyncRuntime) -> Self {
         self.runtime = Some(runtime);
@@ -170,13 +175,15 @@ impl ExporterBuilder {
             panic!("at least one ETW event type must be enabled");
         }
 
-        #[allow(unreachable_patterns)]
         match self.runtime.as_ref() {
             None => (),
             Some(x) => match x {
                 #[cfg(any(feature = "rt-tokio"))]
                 EtwExporterAsyncRuntime::Tokio => (),
-                _ => todo!(),
+                #[cfg(any(feature = "rt-tokio-current-thread"))]
+                EtwExporterAsyncRuntime::TokioCurrentThread => (),
+                #[cfg(any(feature = "rt-async-std"))]
+                EtwExporterAsyncRuntime::AsyncStd => (),
             },
         }
 
@@ -204,7 +211,8 @@ impl ExporterBuilder {
         }
     }
 
-    // Install the ETW exporter as the global tracer provider.
+    /// Install the exporter as the
+    /// [global tracer provider](https://docs.rs/opentelemetry_api/latest/opentelemetry_api/global/index.html).
     pub fn install(
         mut self,
     ) -> <GlobalTracerProvider as opentelemetry_api::trace::TracerProvider>::Tracer {
@@ -213,8 +221,8 @@ impl ExporterBuilder {
         // This will always return a boxed trait object.
         // Hopefully that won't cause too much of a performance issue, since that is a limitation of the global tracer as well.
 
-        // Avoid adding an extra dyn indirection by making sure BatchExporter/RealtimeExporter can be specialized for the exporter config type.
-        // Non-default configs will always be boxed trait objects, but that shouldn't be the common case.
+        // Avoid adding an extra dyn indirection by making sure BatchExporter/RealtimeExporter can be specialized for the keyword provider type.
+        // Non-default keyword providers will always be boxed trait objects, but that shouldn't be the common case.
 
         if !self.emit_realtime_events {
             let provider_builder = match self.runtime {
@@ -317,7 +325,7 @@ impl ExporterBuilder {
                     feature = "rt-tokio-current-thread",
                     feature = "rt-async-std"
                 )))]
-                Some(_) => todo!(),
+                Some(_) => todo!(), // Unreachable
             };
 
             let provider = provider_builder.build();
@@ -366,7 +374,10 @@ impl ExporterBuilder {
         }
 
         global::tracer_provider().versioned_tracer(
+            #[cfg(all(target_os = "windows"))]
             "opentelemetry-etw",
+            #[cfg(all(target_os = "linux"))]
+            "opentelemetry-user_events",
             Some(env!("CARGO_PKG_VERSION")),
             Some("https://microsoft.com/etw"),
         )
