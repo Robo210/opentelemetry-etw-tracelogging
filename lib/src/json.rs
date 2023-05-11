@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use std::{borrow::Cow, collections::HashMap};
 
 use opentelemetry::{Array, Key, Value};

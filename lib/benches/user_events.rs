@@ -49,8 +49,10 @@ impl KeywordLevelProvider for BenchExporterConfig {
 
 #[cfg(all(target_os = "linux"))]
 pub fn user_events_benchmark(c: &mut Criterion) {
-    let mut provider =
-        eventheader_dynamic::Provider::new("otel_bench", &eventheader_dynamic::ProviderOptions::default());
+    let mut provider = eventheader_dynamic::Provider::new(
+        "otel_bench",
+        &eventheader_dynamic::ProviderOptions::default(),
+    );
 
     // Standard real-time level/keyword pairs
     provider.create_unregistered(true, eventheader::Level::Informational, 1);

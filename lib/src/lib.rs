@@ -3,7 +3,7 @@
 //! ## Overview
 //!
 //! This span exporter exports OpenTelemetry Spans as
-//! Windows ETW events or Linux user-mode tracepoints (user_events with the 
+//! Windows ETW events or Linux user-mode tracepoints (user_events with the
 //! [EventHeader](https://github.com/microsoft/LinuxTracepoints/tree/main/libeventheader-tracepoint)
 //! encoding; requires a Linux 6.4+ kernel).
 //! *Note*: Linux kernels without user_events support will not log any events.
@@ -35,7 +35,7 @@
 //! is new to the Linux kernel starting with version 6.4. For the purposes of this exporter,
 //! its functionality is nearly identical to ETW. Any differences between the two will be explicitly
 //! called out in these docs.
-//! 
+//!
 //! The [perf](https://perf.wiki.kernel.org/index.php/Tutorial) tool can be used on Linux to
 //! collect user_events events to a file on disk that can then be processed into a readable
 //! format. Because these events are encoded in the new [EventHeader](https://github.com/microsoft/LinuxTracepoints/)

@@ -159,18 +159,12 @@ pub trait EventExporter {
     fn enabled(&self, level: u8, keyword: u64) -> bool;
 
     // Called by the real-time exporter when a span is started
-    fn log_span_start<S>(
-        &self,
-        span: &S,
-    ) -> opentelemetry_sdk::export::trace::ExportResult
+    fn log_span_start<S>(&self, span: &S) -> opentelemetry_sdk::export::trace::ExportResult
     where
         S: opentelemetry_api::trace::Span + EtwSpan;
 
     // Called by the real-time exporter when a span is ended
-    fn log_span_end<S>(
-        &self,
-        span: &S,
-    ) -> opentelemetry_sdk::export::trace::ExportResult
+    fn log_span_end<S>(&self, span: &S) -> opentelemetry_sdk::export::trace::ExportResult
     where
         S: opentelemetry_api::trace::Span + EtwSpan;
 

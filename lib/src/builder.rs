@@ -97,7 +97,10 @@ impl ExporterBuilder {
     /// Override the default keywords and levels for events.
     /// Provide an implementation of the [`KeywordLevelProvider`] trait that will
     /// return the desired keywords and level values for each type of event.
-    pub fn with_custom_keywords_levels(mut self, config: impl KeywordLevelProvider + 'static) -> Self {
+    pub fn with_custom_keywords_levels(
+        mut self,
+        config: impl KeywordLevelProvider + 'static,
+    ) -> Self {
         self.exporter_config = Some(Box::new(config));
         self
     }
@@ -175,6 +178,11 @@ impl ExporterBuilder {
             panic!("at least one ETW event type must be enabled");
         }
 
+        #[cfg(any(
+            feature = "rt-tokio",
+            feature = "rt-tokio-current-thread",
+            feature = "rt-async-std"
+        ))]
         match self.runtime.as_ref() {
             None => (),
             Some(x) => match x {
@@ -377,7 +385,7 @@ impl ExporterBuilder {
             #[cfg(all(target_os = "windows"))]
             "opentelemetry-etw",
             #[cfg(all(target_os = "linux"))]
-            "opentelemetry-user_events"
+            "opentelemetry-user_events",
         )
     }
 }

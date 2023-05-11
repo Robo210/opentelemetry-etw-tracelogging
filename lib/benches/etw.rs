@@ -117,7 +117,8 @@ pub fn etw_benchmark(c: &mut Criterion) {
             common_schema: false,
             etw_activities: false,
         };
-        let exporter = EtwEventExporter::new(provider.clone(), config, tracelogging::InType::Bool32);
+        let exporter =
+            EtwEventExporter::new(provider.clone(), config, tracelogging::InType::Bool32);
         b.iter(|| (exporter.log_span_data(&span_data)))
     });
 
@@ -137,7 +138,8 @@ pub fn etw_benchmark(c: &mut Criterion) {
             common_schema: true,
             etw_activities: false,
         };
-        let exporter = EtwEventExporter::new(provider.clone(), config, tracelogging::InType::Bool32);
+        let exporter =
+            EtwEventExporter::new(provider.clone(), config, tracelogging::InType::Bool32);
         b.iter(|| (exporter.log_span_data(&span_data)))
     });
 
@@ -149,7 +151,8 @@ pub fn etw_benchmark(c: &mut Criterion) {
             common_schema: false,
             etw_activities: true,
         };
-        let exporter = EtwEventExporter::new(provider.clone(), config, tracelogging::InType::Bool32);
+        let exporter =
+            EtwEventExporter::new(provider.clone(), config, tracelogging::InType::Bool32);
         b.iter(|| (exporter.log_span_data(&span_data)))
     });
 
@@ -161,7 +164,8 @@ pub fn etw_benchmark(c: &mut Criterion) {
             common_schema: true,
             etw_activities: true,
         };
-        let exporter = EtwEventExporter::new(provider.clone(), config, tracelogging::InType::Bool32);
+        let exporter =
+            EtwEventExporter::new(provider.clone(), config, tracelogging::InType::Bool32);
         b.iter(|| (exporter.log_span_data(&span_data)))
     });
 }

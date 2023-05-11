@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_mut, unused_variables)]
+
 use crate::constants::*;
 use crate::error::*;
 use crate::exporter_traits::*;
@@ -152,12 +154,7 @@ impl EtwEventBuilderWrapper {
         use_byte_for_bools: bool,
     ) -> ExportResult {
         for link in links {
-            self.reset(
-                event_name,
-                level,
-                keywords,
-                EVENT_TAG_IGNORE_EVENT_TIME,
-            );
+            self.reset(event_name, level, keywords, EVENT_TAG_IGNORE_EVENT_TIME);
             self.opcode(Opcode::Info);
 
             self.add_filetime(
@@ -209,12 +206,7 @@ impl EtwEventBuilderWrapper {
         export_payload_as_json: bool,
     ) -> ExportResult {
         for event in events {
-            self.reset(
-                &event.name,
-                level,
-                keywords,
-                EVENT_TAG_IGNORE_EVENT_TIME,
-            );
+            self.reset(&event.name, level, keywords, EVENT_TAG_IGNORE_EVENT_TIME);
             self.opcode(Opcode::Info);
 
             self.add_filetime(
@@ -724,11 +716,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
     }
 
     // Called by the real-time exporter when an event is added to a span
-    fn log_span_event<S>(
-        &self,
-        event: opentelemetry_api::trace::Event,
-        span: &S,
-    ) -> ExportResult
+    fn log_span_event<S>(&self, event: opentelemetry_api::trace::Event, span: &S) -> ExportResult
     where
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
@@ -820,8 +808,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
     }
 
     // Called by the batch exporter sometime after span is completed
-    fn log_span_data(&self, span_data: &SpanData) -> ExportResult
-    {
+    fn log_span_data(&self, span_data: &SpanData) -> ExportResult {
         let span_keywords = self.exporter_config.get_span_keywords();
 
         let use_byte_for_bools = match self.bool_representation {
@@ -841,7 +828,9 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
             let mut ebw = ebw.borrow_mut();
             let mut err = Ok(());
 
-            if self.provider.enabled(level, span_keywords) && self.exporter_config.get_export_span_events() {
+            if self.provider.enabled(level, span_keywords)
+                && self.exporter_config.get_export_span_events()
+            {
                 let activities = Activities::generate(
                     &span_data.span_context.span_id(),
                     &span_data.parent_span_id,

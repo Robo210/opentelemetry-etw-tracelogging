@@ -1,9 +1,9 @@
 use crate::builder::ProviderGroup;
 #[allow(unused_imports)]
 use crate::etw::*;
+use crate::exporter_traits::*;
 #[allow(unused_imports)]
 use crate::user_events;
-use crate::{exporter_traits::*};
 #[allow(unused_imports)]
 use crate::user_events::*;
 use opentelemetry::InstrumentationLibrary;
@@ -76,7 +76,7 @@ impl<E: EventExporter> RealtimeSpan<E> {
                 links: EvictedQueue::new(otel_config.span_limits.max_links_per_span),
                 status: builder.status,
                 resource: otel_config.resource.clone(), // TODO: This clone is really inefficient
-                instrumentation_lib, // This is never used
+                instrumentation_lib,                    // This is never used
             },
             ended: AtomicBool::new(false),
         };
@@ -110,9 +110,7 @@ impl<E: EventExporter> RealtimeSpan<E> {
     }
 }
 
-impl<E: EventExporter> opentelemetry_api::trace::Span
-    for RealtimeSpan<E>
-{
+impl<E: EventExporter> opentelemetry_api::trace::Span for RealtimeSpan<E> {
     fn add_event_with_timestamp<N>(
         &mut self,
         name: N,
@@ -203,9 +201,7 @@ impl<E: EventExporter> RealtimeTracer<E> {
     }
 }
 
-impl<E: EventExporter> opentelemetry_api::trace::Tracer
-    for RealtimeTracer<E>
-{
+impl<E: EventExporter> opentelemetry_api::trace::Tracer for RealtimeTracer<E> {
     type Span = RealtimeSpan<E>;
 
     fn build_with_context(&self, builder: SpanBuilder, parent_cx: &Context) -> Self::Span {
@@ -298,7 +294,11 @@ impl<C: KeywordLevelProvider, E: EventExporter> opentelemetry_api::trace::Tracer
     type Tracer = RealtimeTracer<E>;
 
     fn tracer(&self, name: impl Into<std::borrow::Cow<'static, str>>) -> Self::Tracer {
-        self.versioned_tracer(name, Some(env!("CARGO_PKG_VERSION")), Some("https://microsoft.com/etw"))
+        self.versioned_tracer(
+            name,
+            Some(env!("CARGO_PKG_VERSION")),
+            Some("https://microsoft.com/etw"),
+        )
     }
 
     fn versioned_tracer(

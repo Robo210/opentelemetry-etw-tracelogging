@@ -1,5 +1,7 @@
-use eventheader_dynamic::{EventBuilder, EventSet};
+#![allow(unused_imports, unused_mut, unused_variables)]
+
 use eventheader::{FieldFormat, Level, Opcode};
+use eventheader_dynamic::{EventBuilder, EventSet};
 use opentelemetry::{
     trace::{Event, Link, SpanContext, SpanId, SpanKind, Status, TraceError},
     Array, Key, Value,
@@ -12,49 +14,28 @@ use crate::{constants::*, error::*, exporter_traits::*, json};
 thread_local! {static EBW: RefCell<EventBuilder> = RefCell::new(EventBuilder::new());}
 
 #[allow(dead_code)]
-pub(crate) fn register_eventsets(provider: &mut eventheader_dynamic::Provider, kwl: &impl KeywordLevelProvider) {
+pub(crate) fn register_eventsets(
+    provider: &mut eventheader_dynamic::Provider,
+    kwl: &impl KeywordLevelProvider,
+) {
     #[cfg(not(test))]
     {
         // Standard real-time level/keyword pairs
-        provider.register_set(
-            kwl.get_span_level().into(),
-            kwl.get_span_keywords(),
-        );
-        provider.register_set(
-            kwl.get_event_level().into(),
-            kwl.get_event_keywords(),
-        );
-        provider.register_set(
-            kwl.get_links_level().into(),
-            kwl.get_links_keywords(),
-        );
+        provider.register_set(kwl.get_span_level().into(), kwl.get_span_keywords());
+        provider.register_set(kwl.get_event_level().into(), kwl.get_event_keywords());
+        provider.register_set(kwl.get_links_level().into(), kwl.get_links_keywords());
 
         // Common Schema events use a level based on a span's Status
         provider.register_set(eventheader::Level::Informational, kwl.get_span_keywords());
         provider.register_set(eventheader::Level::Error, kwl.get_span_keywords());
-        provider.register_set(
-            eventheader::Level::Verbose,
-            kwl.get_span_keywords(),
-        );
+        provider.register_set(eventheader::Level::Verbose, kwl.get_span_keywords());
     }
     #[cfg(test)]
     {
         // Standard real-time level/keyword pairs
-        provider.create_unregistered(
-            true,
-            kwl.get_span_level().into(),
-            kwl.get_span_keywords(),
-        );
-        provider.create_unregistered(
-            true,
-            kwl.get_event_level().into(),
-            kwl.get_event_keywords(),
-        );
-        provider.create_unregistered(
-            true,
-            kwl.get_links_level().into(),
-            kwl.get_links_keywords(),
-        );
+        provider.create_unregistered(true, kwl.get_span_level().into(), kwl.get_span_keywords());
+        provider.create_unregistered(true, kwl.get_event_level().into(), kwl.get_event_keywords());
+        provider.create_unregistered(true, kwl.get_links_level().into(), kwl.get_links_keywords());
 
         // Common Schema events use a level based on a span's Status
         provider.create_unregistered(
@@ -62,16 +43,8 @@ pub(crate) fn register_eventsets(provider: &mut eventheader_dynamic::Provider, k
             eventheader::Level::Informational,
             kwl.get_span_keywords(),
         );
-        provider.create_unregistered(
-            true,
-            eventheader::Level::Error,
-            kwl.get_span_keywords(),
-        );
-        provider.create_unregistered(
-            true,
-            eventheader::Level::Verbose,
-            kwl.get_span_keywords(),
-        );
+        provider.create_unregistered(true, eventheader::Level::Error, kwl.get_span_keywords());
+        provider.create_unregistered(true, eventheader::Level::Verbose, kwl.get_span_keywords());
     }
 }
 
@@ -82,9 +55,15 @@ pub(crate) struct UserEventsExporter<C: KeywordLevelProvider> {
 
 impl<C: KeywordLevelProvider> UserEventsExporter<C> {
     #[allow(dead_code)]
-    pub(crate) fn new(provider: Arc<eventheader_dynamic::Provider>, exporter_config: ExporterConfig<C>) -> Self {
+    pub(crate) fn new(
+        provider: Arc<eventheader_dynamic::Provider>,
+        exporter_config: ExporterConfig<C>,
+    ) -> Self {
         // Unfortunately we can't safely share a cached EventBuilder without adding undesirable locking
-        UserEventsExporter { provider, exporter_config }
+        UserEventsExporter {
+            provider,
+            exporter_config,
+        }
     }
 
     fn add_attributes_to_event(
@@ -548,10 +527,10 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
             return Ok(());
         }
 
-        let span_es = if let Some(es) = self
-            .provider
-            .find_set(self.exporter_config.get_span_level().into(), self.exporter_config.get_span_keywords())
-        {
+        let span_es = if let Some(es) = self.provider.find_set(
+            self.exporter_config.get_span_level().into(),
+            self.exporter_config.get_span_keywords(),
+        ) {
             es
         } else {
             return Ok(());
@@ -590,10 +569,10 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                 export_payload_as_json,
             )?;
 
-            let links_es = if let Some(es) = self
-                .provider
-                .find_set(self.exporter_config.get_links_level().into(), self.exporter_config.get_links_keywords())
-            {
+            let links_es = if let Some(es) = self.provider.find_set(
+                self.exporter_config.get_links_level().into(),
+                self.exporter_config.get_links_keywords(),
+            ) {
                 es
             } else {
                 return Ok(());
@@ -622,10 +601,10 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
         //let event_keywords = provider.get_event_keywords();
         let export_payload_as_json = self.exporter_config.get_export_as_json();
 
-        let span_es = if let Some(es) = self
-            .provider
-            .find_set(self.exporter_config.get_span_level().into(), self.exporter_config.get_span_keywords())
-        {
+        let span_es = if let Some(es) = self.provider.find_set(
+            self.exporter_config.get_span_level().into(),
+            self.exporter_config.get_span_keywords(),
+        ) {
             es
         } else {
             return Ok(());
@@ -680,18 +659,14 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
     }
 
     // Called by the real-time exporter when an event is added to a span
-    fn log_span_event<S>(
-        &self,
-        event: opentelemetry_api::trace::Event,
-        span: &S,
-    ) -> ExportResult
+    fn log_span_event<S>(&self, event: opentelemetry_api::trace::Event, span: &S) -> ExportResult
     where
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
-        let span_es = if let Some(es) = self
-            .provider
-            .find_set(self.exporter_config.get_span_level().into(), self.exporter_config.get_span_keywords())
-        {
+        let span_es = if let Some(es) = self.provider.find_set(
+            self.exporter_config.get_span_level().into(),
+            self.exporter_config.get_span_keywords(),
+        ) {
             es
         } else {
             return Ok(());
@@ -783,8 +758,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
     }
 
     // Called by the batch exporter sometime after span is completed
-    fn log_span_data(&self, span_data: &SpanData) -> ExportResult
-    {
+    fn log_span_data(&self, span_data: &SpanData) -> ExportResult {
         let export_payload_as_json = self.exporter_config.get_export_as_json();
 
         let level = match span_data.status {
@@ -793,7 +767,9 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
             Status::Unset => Level::Verbose,
         };
 
-        let span_es = if let Some(es) = self.provider.find_set(level, self.exporter_config.get_span_keywords())
+        let span_es = if let Some(es) = self
+            .provider
+            .find_set(level, self.exporter_config.get_span_keywords())
         {
             es
         } else {
@@ -830,10 +806,10 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                         export_payload_as_json,
                     )
                     .and_then(|_| {
-                        let events_es = if let Some(es) = self
-                            .provider
-                            .find_set(self.exporter_config.get_event_level().into(), self.exporter_config.get_event_keywords())
-                        {
+                        let events_es = if let Some(es) = self.provider.find_set(
+                            self.exporter_config.get_event_level().into(),
+                            self.exporter_config.get_event_keywords(),
+                        ) {
                             es
                         } else {
                             return Ok(());
@@ -852,10 +828,10 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                         )
                     })
                     .and_then(|_| {
-                        let links_es = if let Some(es) = self
-                            .provider
-                            .find_set(self.exporter_config.get_links_level().into(), self.exporter_config.get_links_keywords())
-                        {
+                        let links_es = if let Some(es) = self.provider.find_set(
+                            self.exporter_config.get_links_level().into(),
+                            self.exporter_config.get_links_keywords(),
+                        ) {
                             es
                         } else {
                             return Ok(());
@@ -892,10 +868,10 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
             }
 
             if self.exporter_config.get_export_common_schema_event() {
-                let span_es = if let Some(es) = self
-                    .provider
-                    .find_set(Level::Informational, self.exporter_config.get_span_keywords())
-                {
+                let span_es = if let Some(es) = self.provider.find_set(
+                    Level::Informational,
+                    self.exporter_config.get_span_keywords(),
+                ) {
                     es
                 } else {
                     return Ok(());
