@@ -1,11 +1,9 @@
-use crate::builder::ProviderGroup;
+use crate::spans::builder::ProviderGroup;
 #[allow(unused_imports)]
-use crate::etw::*;
+use crate::etw;
 use crate::exporter_traits::*;
 #[allow(unused_imports)]
 use crate::user_events;
-#[allow(unused_imports)]
-use crate::user_events::*;
 use futures_util::future::BoxFuture;
 use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
 use std::fmt::Debug;
@@ -16,7 +14,7 @@ pub(crate) struct BatchExporter<E: EventExporter + Send + Sync> {
 }
 
 #[cfg(all(target_os = "windows"))]
-impl<C: KeywordLevelProvider> BatchExporter<EtwEventExporter<C>> {
+impl<C: KeywordLevelProvider> BatchExporter<etw::EtwEventExporter<C>> {
     pub(crate) fn new(
         provider_name: &str,
         provider_group: ProviderGroup,
@@ -33,7 +31,7 @@ impl<C: KeywordLevelProvider> BatchExporter<EtwEventExporter<C>> {
             provider.as_ref().register();
         }
         BatchExporter {
-            ebw: EtwEventExporter::new(
+            ebw: etw::EtwEventExporter::new(
                 provider,
                 exporter_config,
                 if use_byte_for_bools {
@@ -47,7 +45,7 @@ impl<C: KeywordLevelProvider> BatchExporter<EtwEventExporter<C>> {
 }
 
 #[cfg(all(target_os = "linux"))]
-impl<C: KeywordLevelProvider> BatchExporter<UserEventsExporter<C>> {
+impl<C: KeywordLevelProvider> BatchExporter<user_events::UserEventsExporter<C>> {
     pub(crate) fn new(
         provider_name: &str,
         provider_group: ProviderGroup,
@@ -62,7 +60,7 @@ impl<C: KeywordLevelProvider> BatchExporter<UserEventsExporter<C>> {
         user_events::register_eventsets(&mut provider, &exporter_config);
 
         BatchExporter {
-            ebw: UserEventsExporter::new(Arc::new(provider), exporter_config),
+            ebw: user_events::UserEventsExporter::new(Arc::new(provider), exporter_config),
         }
     }
 }

@@ -1,13 +1,9 @@
 #![allow(unused_imports, dead_code)]
 
-#[path = "../src/constants.rs"]
-mod constants;
-#[path = "../src/error.rs"]
-mod error;
 #[path = "../src/exporter_traits.rs"]
 mod exporter_traits;
-#[path = "../src/json.rs"]
-mod json;
+#[path = "../src/common/mod.rs"]
+mod common;
 #[path = "../src/user_events.rs"]
 mod user_events;
 

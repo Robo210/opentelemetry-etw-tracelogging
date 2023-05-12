@@ -1,9 +1,6 @@
 #![allow(unused_imports, unused_mut, unused_variables)]
 
-use crate::constants::*;
-use crate::error::*;
-use crate::exporter_traits::*;
-use crate::json;
+use crate::{exporter_traits::*, common::{json, activities::*, EtwSpan, *}};
 use chrono::{Datelike, Timelike};
 use opentelemetry::Array;
 use opentelemetry::{

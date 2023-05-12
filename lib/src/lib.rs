@@ -122,19 +122,10 @@
 //! - The C++ exporter supports logs from the the OpenTelemetry Logging API proposal.
 //! This is not (yet) supported by OpenTelemetry-Rust.
 //! - The C++ exporter does not (currently) use opcodes or levels on its ETW events.
-mod batch_exporter;
-mod builder;
-mod constants;
-mod error;
+pub mod spans;
+pub mod common;
 mod etw;
 mod exporter_traits;
-mod json;
-mod realtime_exporter;
 mod user_events;
 
-pub mod span_exporter {
-    pub use crate::builder::*;
-    pub use crate::error::*;
-    pub use crate::exporter_traits::*;
-    pub use crate::realtime_exporter::*;
-}
+pub use exporter_traits::*;

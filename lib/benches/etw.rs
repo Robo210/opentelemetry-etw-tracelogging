@@ -1,15 +1,11 @@
 #![allow(unused_imports, dead_code)]
 
-#[path = "../src/constants.rs"]
-mod constants;
-#[path = "../src/error.rs"]
-mod error;
 #[path = "../src/etw.rs"]
 mod etw;
 #[path = "../src/exporter_traits.rs"]
 mod exporter_traits;
-#[path = "../src/json.rs"]
-mod json;
+#[path = "../src/common/mod.rs"]
+mod common;
 
 use crate::exporter_traits::*;
 use criterion::{criterion_group, criterion_main, Criterion};

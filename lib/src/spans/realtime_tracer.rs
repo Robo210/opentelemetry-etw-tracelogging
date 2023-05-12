@@ -1,11 +1,10 @@
-use crate::builder::ProviderGroup;
+use crate::spans::builder::ProviderGroup;
 #[allow(unused_imports)]
-use crate::etw::*;
+use crate::etw;
 use crate::exporter_traits::*;
+use crate::common::EtwSpan;
 #[allow(unused_imports)]
 use crate::user_events;
-#[allow(unused_imports)]
-use crate::user_events::*;
 use opentelemetry::InstrumentationLibrary;
 use opentelemetry::{
     trace::{
@@ -230,7 +229,7 @@ pub struct RealtimeTracerProvider<C: KeywordLevelProvider, E: EventExporter> {
 }
 
 #[cfg(all(target_os = "windows"))]
-impl<C: KeywordLevelProvider> RealtimeTracerProvider<C, EtwEventExporter<C>> {
+impl<C: KeywordLevelProvider> RealtimeTracerProvider<C, etw::EtwEventExporter<C>> {
     pub(crate) fn new(
         provider_name: &str,
         provider_group: ProviderGroup,
@@ -250,7 +249,7 @@ impl<C: KeywordLevelProvider> RealtimeTracerProvider<C, EtwEventExporter<C>> {
 
         RealtimeTracerProvider {
             otel_config: Arc::new(otel_config),
-            event_exporter: Arc::new(EtwEventExporter::new(
+            event_exporter: Arc::new(etw::EtwEventExporter::new(
                 provider,
                 exporter_config,
                 if use_byte_for_bools {
@@ -265,7 +264,7 @@ impl<C: KeywordLevelProvider> RealtimeTracerProvider<C, EtwEventExporter<C>> {
 }
 
 #[cfg(all(target_os = "linux"))]
-impl<C: KeywordLevelProvider> RealtimeTracerProvider<C, UserEventsExporter<C>> {
+impl<C: KeywordLevelProvider> RealtimeTracerProvider<C, user_events::UserEventsExporter<C>> {
     pub(crate) fn new(
         provider_name: &str,
         provider_group: ProviderGroup,
@@ -282,7 +281,7 @@ impl<C: KeywordLevelProvider> RealtimeTracerProvider<C, UserEventsExporter<C>> {
 
         RealtimeTracerProvider {
             otel_config: Arc::new(otel_config),
-            event_exporter: Arc::new(UserEventsExporter::new(Arc::new(provider), exporter_config)),
+            event_exporter: Arc::new(user_events::UserEventsExporter::new(Arc::new(provider), exporter_config)),
             _x: core::marker::PhantomData,
         }
     }

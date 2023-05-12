@@ -3,20 +3,48 @@ use opentelemetry::Key;
 use opentelemetry_api::global::shutdown_tracer_provider;
 use opentelemetry_api::trace::{Span, Tracer};
 use opentelemetry_etw_user_events as otel_etw;
-use otel_etw::span_exporter::EtwExporterAsyncRuntime;
+use otel_etw::EtwExporterAsyncRuntime;
 
 const SAMPLE_KEY_STR: Key = Key::from_static_str("str");
 const SAMPLE_KEY_BOOL: Key = Key::from_static_str("bool");
 const SAMPLE_KEY_INT: Key = Key::from_static_str("int");
 const SAMPLE_KEY_FLOAT: Key = Key::from_static_str("float");
 
+struct Kwl;
+impl otel_etw::KeywordLevelProvider for Kwl {
+    fn get_event_keywords(&self) -> u64 {
+        1
+    }
+
+    fn get_event_level(&self) -> u8 {
+        1
+    }
+
+    fn get_links_keywords(&self) -> u64 {
+        1
+    }
+
+    fn get_links_level(&self) -> u8 {
+        1
+    }
+
+    fn get_span_keywords(&self) -> u64 {
+        1
+    }
+
+    fn get_span_level(&self) -> u8 {
+        1
+    }
+}
+
 fn main() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        let tracer2 = otel_etw::span_exporter::new_exporter("SampleProviderName")
+        let tracer2 = otel_etw::spans::new_exporter("SampleProviderName")
             .with_common_schema_events()
             .without_realtime_events()
             .with_async_runtime(EtwExporterAsyncRuntime::Tokio)
+            .with_custom_keywords_levels(Kwl{})
             .install();
 
         tracer2.in_span("OuterSpanName", |cx| {

@@ -1,27 +1,10 @@
 use std::borrow::Cow;
 
-use crate::batch_exporter::*;
+use crate::spans::{batch_exporter::*, realtime_tracer::*};
 use crate::exporter_traits::*;
-use crate::realtime_exporter::*;
 use opentelemetry::global::GlobalTracerProvider;
 use opentelemetry_api::{global, trace::TracerProvider};
 use tracelogging_dynamic::Guid;
-
-/// The async runtime to use with OpenTelemetry-Rust's BatchExporter.
-/// See <https://docs.rs/opentelemetry/latest/opentelemetry/index.html#crate-feature-flags>
-/// for more details.
-#[derive(Debug)]
-pub enum EtwExporterAsyncRuntime {
-    #[cfg(any(feature = "rt-tokio"))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
-    Tokio,
-    #[cfg(any(feature = "rt-tokio-current-thread"))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio-current-thread")))]
-    TokioCurrentThread,
-    #[cfg(any(feature = "rt-async-std"))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rt-async-std")))]
-    AsyncStd,
-}
 
 pub(crate) enum ProviderGroup {
     Unset,
