@@ -10,7 +10,7 @@ authors = ["Kyle Sabo"]
 [dependencies]
 opentelemetry = {workspace = true}
 opentelemetry_api = {workspace = true}
-opentelemetry_sdk = {version="0.18", features=["rt-tokio"]}
+opentelemetry_sdk = {workspace = true, features=["rt-tokio"]}
 opentelemetry-etw-user_events = {version="0.3", path="../lib", features=["json", "rt-tokio"]}
 tokio = "1.0"
 

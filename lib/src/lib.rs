@@ -78,7 +78,7 @@
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
 //!
-//! let tracer = opentelemetry_etw_user_events::span_exporter::new_exporter("MyEtwProviderName")
+//! let tracer = opentelemetry_etw_user_events::spans::new_exporter("MyEtwProviderName")
 //!     .install();
 //!
 //! tracer.in_span("doing_work", |cx| {
@@ -103,7 +103,7 @@
 //! - The C++ exporter emits `bool` field types as InType `xs:byte`, OutType `xs:boolean`.
 //! The Rust exporter emits, `bool` field types as InType `win:Boolean`, OutType `xs:boolean`.
 //!   - The C++ representation is more space efficient but is non-standard.
-//!   - Rust applications can use the `xs:byte` representation by calling [`span_exporter::ExporterBuilder::with_byte_sized_bools`]
+//!   - Rust applications can use the `xs:byte` representation by calling [`spans::ExporterBuilder::with_byte_sized_bools`]
 //!   when building the exporter.
 //! - The C++ exporter converts the span Kind and Status to numeric values. The Rust exporter logs the string values.
 //! - The C++ exporter converts span Links into a single comma-separated string of span IDs, and does not include
@@ -117,7 +117,7 @@
 //! - The C++ exporter can combine all attributes into a single JSON string that is then encoded with MsgPack,
 //! and adds it to the ETW event as a field named "Payload".
 //!   - Rust applications can emit a JSON string containing all the attributes by enabling the optional feature
-//!   `json` on the crate and calling [`span_exporter::ExporterBuilder::with_json_payload`] when building
+//!   `json` on the crate and calling [`spans::ExporterBuilder::with_json_payload`] when building
 //!   the exporter. MsgPack encoding is not supported.
 //! - The C++ exporter supports logs from the the OpenTelemetry Logging API proposal.
 //! This is not (yet) supported by OpenTelemetry-Rust.

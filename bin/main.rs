@@ -50,7 +50,7 @@ fn main() {
         tracer2.in_span("OuterSpanName", |cx| {
             std::thread::sleep(std::time::Duration::from_millis(1000));
 
-            let mut span = cx.span();
+            let span = cx.span();
             span.set_attributes(vec![SAMPLE_KEY_INT.i64(5), SAMPLE_KEY_FLOAT.f64(7.1)]);
 
             span.add_event(

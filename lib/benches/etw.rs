@@ -78,7 +78,7 @@ pub fn etw_benchmark(c: &mut Criterion) {
     }
     let provider_id = provider.id().clone();
 
-    let instrumentation_lib = InstrumentationLibrary::new(Cow::Borrowed("bench"), None, None);
+    let instrumentation_lib = InstrumentationLibrary::new("bench", Option::<&str>::None, Option::<&str>::None, None);
 
     let otel_config = opentelemetry_sdk::trace::config();
 

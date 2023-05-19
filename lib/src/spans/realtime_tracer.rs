@@ -292,19 +292,21 @@ impl<C: KeywordLevelProvider, E: EventExporter> opentelemetry_api::trace::Tracer
 {
     type Tracer = RealtimeTracer<E>;
 
-    fn tracer(&self, name: impl Into<std::borrow::Cow<'static, str>>) -> Self::Tracer {
+    fn tracer(&self, name: impl Into<Cow<'static, str>>,) -> Self::Tracer {
         self.versioned_tracer(
             name,
             Some(env!("CARGO_PKG_VERSION")),
             Some("https://microsoft.com/etw"),
+            None
         )
     }
-
+    
     fn versioned_tracer(
         &self,
-        name: impl Into<std::borrow::Cow<'static, str>>,
-        version: Option<&'static str>,
-        schema_url: Option<&'static str>,
+        name: impl Into<Cow<'static, str>>,
+        version: Option<impl Into<Cow<'static, str>>>,
+        schema_url: Option<impl Into<Cow<'static, str>>>,
+        attributes: Option<Vec<opentelemetry_api::KeyValue>>,
     ) -> Self::Tracer {
         let name = name.into();
         // Use default value if name is invalid empty string
@@ -317,6 +319,7 @@ impl<C: KeywordLevelProvider, E: EventExporter> opentelemetry_api::trace::Tracer
             component_name,
             version.map(Into::into),
             schema_url.map(Into::into),
+            attributes
         );
 
         RealtimeTracer::new(

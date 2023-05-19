@@ -3,6 +3,11 @@ members = ["bin", "lib"]
 resolver = "2"
 
 [workspace.dependencies]
-opentelemetry = "0.18"
-opentelemetry_api = {version="0.18", default-features = false, features=["trace"]}
-opentelemetry_sdk = "0.18"
+opentelemetry = "0.19"
+opentelemetry_api = {version="0.19", default-features = false, features=["trace"]}
+opentelemetry_sdk = "0.19"
+
+[patch.crates-io]
+opentelemetry = {path = "../opentelemetry-rust/opentelemetry"}
+opentelemetry_api = {path = "../opentelemetry-rust/opentelemetry-api"}
+opentelemetry_sdk = {path = "../opentelemetry-rust/opentelemetry-sdk"}
