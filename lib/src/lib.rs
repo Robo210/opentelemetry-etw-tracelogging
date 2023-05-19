@@ -1,17 +1,20 @@
-//! # ETW Span Exporter
+//! # TraceLogging-style Span Exporter for ETW and Linux user_events
 //!
 //! ## Overview
 //!
-//! The ETW Span Exporter logs ETW events for each start, stop, and added event for a
-//! OpenTelemetry Span.
+//! This span exporter exports OpenTelemetry Spans as
+//! Windows ETW events or Linux user-mode tracepoints (user_events with the
+//! [EventHeader](https://github.com/microsoft/LinuxTracepoints/tree/main/libeventheader-tracepoint)
+//! encoding; requires a Linux 6.4+ kernel).
+//! *Note*: Linux kernels without user_events support will not log any events.
+//!
+//! ### ETW
 //!
 //! ETW is a Windows-specific system wide, high performance, lossy tracing API built into the
 //! Windows kernel. Turning Spans into ETW events (activities) can allow a user to
-//! the correlate the Span to other system activity, such as disk IO, memory allocations,
+//! then correlate the Span to other system activity, such as disk IO, memory allocations,
 //! sample profiling, network activity, or any other event logged by the thousands of
 //! ETW providers built into Windows and 3rd party software and drivers.
-//!
-//! This crate is a no-op when running on Linux.
 //!
 //! ETW is not designed to be a transport mechanism or message passing interface for
 //! forwarding data. These scenarios are better covered by other technologies
@@ -26,11 +29,19 @@
 //! This Span exporter uses [TraceLogging](https://learn.microsoft.com/windows/win32/tracelogging/trace-logging-about)
 //! to log events. The ETW provider ID is generated from a hash of the specified provider name.
 //!
-//! By default, span start and stop events are logged with keyword 1 and
-//! [`tracelogging::Level::Informational`].
-//! Events attached to the span are logged with keyword 2 and [`tracelogging::Level::Verbose`].
-//! Span Links are logged as events with keyword 4 and [`tracelogging::Level::Verbose`].
+//! ### Linux user_events
 //!
+//! User-mode event tracing [(user_events)](https://docs.kernel.org/trace/user_events.html)
+//! is new to the Linux kernel starting with version 6.4. For the purposes of this exporter,
+//! its functionality is nearly identical to ETW. Any differences between the two will be explicitly
+//! called out in these docs.
+//!
+//! The [perf](https://perf.wiki.kernel.org/index.php/Tutorial) tool can be used on Linux to
+//! collect user_events events to a file on disk that can then be processed into a readable
+//! format. Because these events are encoded in the new [EventHeader](https://github.com/microsoft/LinuxTracepoints/)
+//! format, you will need a tool that understands this encoding to process the perf.dat file.
+//! The [decode_perf](https://github.com/microsoft/LinuxTracepoints/tree/main/libeventheader-decode-cpp)
+//! sample tool can be used to do this currently; in the future support will be added to additional tools.
 //!
 //! ## Realtime Events
 //!
@@ -48,10 +59,11 @@
 //! ## Common Schema 4.0 Events
 //!
 //! Common Schema 4.0 events are for advanced scenarios, when the event consumer
-//! requires events in this schema. Spans are exported asynchronously
+//! requires events in this schema. If you are unfamiliar with Common Schema,
+//! then you do not want to enable this. Spans are exported asynchronously
 //! and in batches. Because of this, the timestamps on the ETW events do not
 //! represent the time the span was originally started or ended.
-//! 
+//!
 //! ## Span Links
 //!
 //! For non-Common Schema 4.0 events, each span link is exported as a separate ETW event.
@@ -59,14 +71,14 @@
 //! will match the span's activity ID. A `Link` field in the payload contains the linked
 //! span's ID, and any attributes for the link will be logged as additional payload fields.
 //! Links are not (currently) supported by the JSON exporter option (described below).
-//! 
+//!
 //! ## Example
 //!
 //! ```no_run
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
 //!
-//! let tracer = opentelemetry_etw::span_exporter::new_etw_exporter("MyEtwProviderName")
+//! let tracer = opentelemetry_etw_user_events::span_exporter::new_exporter("MyEtwProviderName")
 //!     .install();
 //!
 //! tracer.in_span("doing_work", |cx| {
@@ -91,7 +103,7 @@
 //! - The C++ exporter emits `bool` field types as InType `xs:byte`, OutType `xs:boolean`.
 //! The Rust exporter emits, `bool` field types as InType `win:Boolean`, OutType `xs:boolean`.
 //!   - The C++ representation is more space efficient but is non-standard.
-//!   - Rust applications can use the `xs:byte` representation by calling [`span_exporter::EtwExporterBuilder::with_byte_sized_bools`]
+//!   - Rust applications can use the `xs:byte` representation by calling [`span_exporter::ExporterBuilder::with_byte_sized_bools`]
 //!   when building the exporter.
 //! - The C++ exporter converts the span Kind and Status to numeric values. The Rust exporter logs the string values.
 //! - The C++ exporter converts span Links into a single comma-separated string of span IDs, and does not include
@@ -105,27 +117,15 @@
 //! - The C++ exporter can combine all attributes into a single JSON string that is then encoded with MsgPack,
 //! and adds it to the ETW event as a field named "Payload".
 //!   - Rust applications can emit a JSON string containing all the attributes by enabling the optional feature
-//!   `json` on the crate and calling [`span_exporter::EtwExporterBuilder::with_json_payload`] when building
+//!   `json` on the crate and calling [`span_exporter::ExporterBuilder::with_json_payload`] when building
 //!   the exporter. MsgPack encoding is not supported.
 //! - The C++ exporter supports logs from the the OpenTelemetry Logging API proposal.
 //! This is not (yet) supported by OpenTelemetry-Rust.
 //! - The C++ exporter does not (currently) use opcodes or levels on its ETW events.
-//! - The C++ exporter and Rust exporter use different algorithms to generate activity IDs from span IDs.
-//! This should not be noticeable as span IDs and activity IDs should always be unique.
-//!   - The C++ exporter (currently) copies the 8-byte span ID into the 16-byte activity ID GUID, leaving the
-//!   remaining 8 bytes empty. This makes the GUID non-compliant, and the uniqueness guarantees of a GUID/LUID
-//!   cannot be applied to activities IDs generated in this way.
-mod batch_exporter;
-mod builder;
-mod constants;
-mod error;
-mod etw_exporter;
-mod realtime_exporter;
+pub mod spans;
+pub mod common;
+mod etw;
+mod exporter_traits;
+mod user_events;
 
-pub mod span_exporter {
-    pub use crate::batch_exporter::*;
-    pub use crate::builder::*;
-    pub use crate::constants::*;
-    pub use crate::error::*;
-    pub use crate::realtime_exporter::*;
-}
+pub use exporter_traits::*;

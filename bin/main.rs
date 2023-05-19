@@ -1,73 +1,70 @@
-use opentelemetry::trace::{Link, SpanContext, TraceContextExt};
+use opentelemetry::trace::{Link, TraceContextExt};
 use opentelemetry::Key;
 use opentelemetry_api::global::shutdown_tracer_provider;
 use opentelemetry_api::trace::{Span, Tracer};
-use opentelemetry_etw as otel_etw;
-use otel_etw::span_exporter::EtwExporterAsyncRuntime;
+use opentelemetry_etw_user_events as otel_etw;
+use otel_etw::EtwExporterAsyncRuntime;
 
 const SAMPLE_KEY_STR: Key = Key::from_static_str("str");
 const SAMPLE_KEY_BOOL: Key = Key::from_static_str("bool");
 const SAMPLE_KEY_INT: Key = Key::from_static_str("int");
 const SAMPLE_KEY_FLOAT: Key = Key::from_static_str("float");
 
+struct Kwl;
+impl otel_etw::KeywordLevelProvider for Kwl {
+    fn get_event_keywords(&self) -> u64 {
+        1
+    }
+
+    fn get_event_level(&self) -> u8 {
+        1
+    }
+
+    fn get_links_keywords(&self) -> u64 {
+        1
+    }
+
+    fn get_links_level(&self) -> u8 {
+        1
+    }
+
+    fn get_span_keywords(&self) -> u64 {
+        1
+    }
+
+    fn get_span_level(&self) -> u8 {
+        1
+    }
+}
+
 fn main() {
-    // let tracer = otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name")
-    //     .with_json_payload()
-    //     .install_simple();
-
-    let span_context: SpanContext = SpanContext::empty_context();
-
-    // tracer.in_span("OuterSpanName", |cx| {
-    //     std::thread::sleep(std::time::Duration::from_millis(1000));
-
-    //     let span = cx.span();
-
-    //     span_context = span.span_context().clone();
-
-    //     span.add_event(
-    //         "SampleEventName",
-    //         vec![
-    //             SAMPLE_KEY_STR.string("sample string"),
-    //             SAMPLE_KEY_BOOL.bool(true),
-    //         ],
-    //     );
-
-    //     let span_builder = tracer
-    //         .span_builder("OuterSpanName")
-    //         .with_kind(opentelemetry::trace::SpanKind::Client)
-    //         .with_status(opentelemetry::trace::Status::Error {
-    //             description: "My error message".into(),
-    //         });
-
-    //     let mut span = tracer.build(span_builder);
-
-    //     std::thread::sleep(std::time::Duration::from_millis(1000));
-    //     span.add_event("SampleEvent2", vec![]);
-    //     std::thread::sleep(std::time::Duration::from_millis(1000));
-    // });
-
-    // std::thread::sleep(std::time::Duration::from_millis(1000));
-
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        let tracer2 = otel_etw::span_exporter::new_etw_exporter("Sample-Provider-Name")
+        let tracer2 = otel_etw::spans::new_exporter("SampleProviderName")
             .with_common_schema_events()
+            .without_realtime_events()
             .with_async_runtime(EtwExporterAsyncRuntime::Tokio)
+            .with_custom_keywords_levels(Kwl{})
             .install();
 
-        tracer2.in_span("RealtimeOuterSpanName", |cx| {
+        tracer2.in_span("OuterSpanName", |cx| {
             std::thread::sleep(std::time::Duration::from_millis(1000));
 
-            let span = cx.span();
+            let mut span = cx.span();
+            span.set_attributes(vec![SAMPLE_KEY_INT.i64(5), SAMPLE_KEY_FLOAT.f64(7.1)]);
+
             span.add_event(
-                "RealtimeSampleEventName",
+                "SampleEventName",
                 vec![SAMPLE_KEY_INT.i64(5), SAMPLE_KEY_FLOAT.f64(7.1)],
             );
 
-            let link = Link::new(span_context, vec![SAMPLE_KEY_STR.string("link_attribute")]);
+            let link = Link::new(
+                span.span_context().clone(),
+                vec![SAMPLE_KEY_STR.string("link_attribute")],
+            );
 
             let span_builder = tracer2
-                .span_builder("RealtimeOuterSpanName")
+                .span_builder("InnerSpanName")
                 .with_kind(opentelemetry::trace::SpanKind::Server)
                 .with_links(vec![link])
                 .with_status(opentelemetry::trace::Status::Ok);
@@ -76,9 +73,10 @@ fn main() {
 
             std::thread::sleep(std::time::Duration::from_millis(1000));
             span.add_event(
-                "RealtimeSampleEvent2",
+                "SampleEventName2",
                 vec![SAMPLE_KEY_BOOL.array(vec![false, true, false])],
             );
+
             std::thread::sleep(std::time::Duration::from_millis(1000));
         });
 
