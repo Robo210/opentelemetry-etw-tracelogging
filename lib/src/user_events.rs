@@ -6,7 +6,7 @@ use opentelemetry::{
     trace::{Event, Link, SpanContext, SpanId, SpanKind, Status, TraceError},
     Array, Key, Value,
 };
-use opentelemetry_sdk::export::trace::{ExportResult, SpanData};
+use opentelemetry_sdk::export::{trace::{ExportResult, SpanData}, logs::{LogData, self}};
 use std::{cell::RefCell, sync::Arc, time::SystemTime};
 
 use crate::{exporter_traits::*, common::{json, activities::*, EtwSpan, *}};
@@ -896,5 +896,9 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
 
             err
         })
+    }
+
+    fn log_log_data(&self, log_data: &LogData) -> logs::ExportResult {
+        Ok(())
     }
 }

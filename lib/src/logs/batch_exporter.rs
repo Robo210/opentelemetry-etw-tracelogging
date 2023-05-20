@@ -4,8 +4,9 @@ use crate::etw;
 use crate::exporter_traits::*;
 #[allow(unused_imports)]
 use crate::user_events;
-use futures_util::future::BoxFuture;
-use opentelemetry::sdk::export::trace::{ExportResult, SpanData, SpanExporter};
+use async_trait::async_trait;
+use opentelemetry_api::logs::LogResult;
+use opentelemetry_sdk::export::logs::{LogExporter, LogData};
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -71,13 +72,14 @@ impl<E: EventExporter + Send + Sync> Debug for BatchExporter<E> {
     }
 }
 
-impl<E: EventExporter + Send + Sync> SpanExporter for BatchExporter<E> {
-    fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
-        for span in batch {
-            let _ = self.ebw.log_span_data(&span);
+#[async_trait]
+impl<E: EventExporter + Send + Sync> LogExporter for BatchExporter<E> {
+    async fn export(&mut self, batch: Vec<LogData>) -> LogResult<()> {
+        for log_data in batch {
+            let _ = self.ebw.log_log_data(&log_data);
         }
 
-        Box::pin(std::future::ready(Ok(())))
+        Ok(())
     }
 }
 

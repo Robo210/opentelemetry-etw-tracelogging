@@ -173,6 +173,12 @@ pub trait EventExporter {
         &self,
         span_data: &opentelemetry_sdk::export::trace::SpanData,
     ) -> opentelemetry_sdk::export::trace::ExportResult;
+
+    // Called by the batch exporter sometime after span is completed
+    fn log_log_data(
+        &self,
+        log_data: &opentelemetry_sdk::export::logs::LogData,
+    ) -> opentelemetry_sdk::export::logs::ExportResult;
 }
 
 /// The async runtime to use with OpenTelemetry-Rust's BatchExporter.

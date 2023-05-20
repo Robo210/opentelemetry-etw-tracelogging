@@ -122,10 +122,13 @@
 //! - The C++ exporter supports logs from the the OpenTelemetry Logging API proposal.
 //! This is not (yet) supported by OpenTelemetry-Rust.
 //! - The C++ exporter does not (currently) use opcodes or levels on its ETW events.
+mod builder;
 pub mod spans;
+pub mod logs;
 pub mod common;
 mod etw;
 mod exporter_traits;
 mod user_events;
 
 pub use exporter_traits::*;
+pub use builder::*;

@@ -3,6 +3,7 @@
 use std::{borrow::Cow, collections::HashMap};
 
 use opentelemetry::{Array, Key, Value};
+use opentelemetry_api::logs::AnyValue;
 
 #[cfg(feature = "json")]
 pub(crate) fn get_attributes_as_json(attribs: &mut dyn Iterator<Item = (&Key, &Value)>) -> String {
@@ -74,6 +75,56 @@ pub(crate) fn get_attributes_as_json(attribs: &mut dyn Iterator<Item = (&Key, &V
                 }
             },
         }
+    }
+
+    if let Ok(json_string) = serde_json::to_string(&payload) {
+        json_string
+    } else {
+        todo!()
+    }
+}
+
+#[cfg(feature = "json")]
+fn get_value(av: &AnyValue) -> serde_json::Value {
+    match av {
+        AnyValue::Boolean(b) => {
+            serde_json::Value::Bool(*b)
+        }
+        AnyValue::Int(i) => {
+                serde_json::Value::Number(serde_json::Number::from(*i))
+        }
+        AnyValue::Double(f) => {
+                serde_json::Value::Number(serde_json::Number::from_f64(*f).unwrap())
+        }
+        AnyValue::String(s) => {
+            serde_json::Value::String(s.to_string())
+        }
+        AnyValue::ListAny(values) => {
+            serde_json::Value::Array(values.iter().map(|v| get_value(v)).collect())
+        }
+        AnyValue::Bytes(bs) => {
+            // TODO: Probably not the best way to represent a byte array. Maybe hex string instead?
+            serde_json::Value::Array(bs.iter().map(|b| serde_json::Value::Number(serde_json::Number::from(*b))).collect())
+        }
+        AnyValue::Map(m) => {
+            let mut map = serde_json::Map::new();
+            for (k, v) in m {
+                map.insert(k.to_string(), get_value(v));
+            }
+            serde_json::Value::Object(map)
+        }
+    }
+}
+
+#[cfg(feature = "json")]
+pub(crate) fn get_log_attributes_as_json(attribs: &mut dyn Iterator<Item = (&Key, &AnyValue)>) -> String {
+    let mut payload: std::collections::BTreeMap<String, serde_json::Value> = Default::default();
+
+    for attrib in attribs {
+        let field_name = attrib.0.to_string();
+        let value = get_value(attrib.1);
+
+        payload.insert(field_name, value);
     }
 
     if let Ok(json_string) = serde_json::to_string(&payload) {

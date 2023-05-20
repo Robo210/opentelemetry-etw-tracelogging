@@ -11,6 +11,12 @@ pub(crate) struct Activities {
     pub(crate) trace_id_name: [u8; 32],              // Hex string
 }
 
+impl Default for Activities {
+    fn default() -> Self {
+        unsafe { core::mem::zeroed() }
+    }
+}
+
 impl Activities {
     #[allow(invalid_value)]
     pub(crate) fn generate(

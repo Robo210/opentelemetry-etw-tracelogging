@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::spans::{batch_exporter::*, realtime_tracer::*};
+use crate::spans;
 use crate::exporter_traits::*;
 use opentelemetry::global::GlobalTracerProvider;
 use opentelemetry_api::{global, trace::TracerProvider};
@@ -19,6 +19,8 @@ pub struct ExporterBuilder {
     provider_name: String,
     provider_id: Guid,
     provider_group: ProviderGroup,
+    span_exporter: bool,
+    log_exporter: bool,
     use_byte_for_bools: bool,
     json: bool,
     emit_common_schema_events: bool,
@@ -36,6 +38,8 @@ pub fn new_exporter(name: &str) -> ExporterBuilder {
         provider_name: name.to_owned(),
         provider_id: Guid::from_name(name),
         provider_group: ProviderGroup::Unset,
+        span_exporter: false,
+        log_exporter: false,
         use_byte_for_bools: false,
         json: false,
         emit_common_schema_events: false,
@@ -60,6 +64,16 @@ impl ExporterBuilder {
     /// the standard provider name to ID algorithm.
     pub fn get_provider_id(&self) -> Guid {
         self.provider_id
+    }
+
+    pub fn with_span_exporter(mut self) -> Self {
+        self.span_exporter = true;
+        self
+    }
+
+    pub fn with_log_exporter(mut self) -> Self {
+        self.log_exporter = true;
+        self
     }
 
     /// Log bool attributes using an InType of `xs:byte` instead of `win:Boolean`.
@@ -157,6 +171,10 @@ impl ExporterBuilder {
     }
 
     fn validate_config(&self) {
+        if !self.span_exporter && !self.log_exporter {
+            panic!("at least one exporter type (log, span) must be enabled");
+        }
+
         if !self.emit_common_schema_events && !self.emit_realtime_events {
             panic!("at least one ETW event type must be enabled");
         }
@@ -221,7 +239,7 @@ impl ExporterBuilder {
                     let provider_builder = match self.exporter_config {
                         Some(exporter_config) => {
                             opentelemetry_sdk::trace::TracerProvider::builder()
-                                .with_simple_exporter(BatchExporter::new(
+                                .with_simple_exporter(spans::BatchExporter::new(
                                     &self.provider_name,
                                     self.provider_group,
                                     self.use_byte_for_bools,
@@ -234,7 +252,7 @@ impl ExporterBuilder {
                                 ))
                         }
                         None => opentelemetry_sdk::trace::TracerProvider::builder()
-                            .with_simple_exporter(BatchExporter::new(
+                            .with_simple_exporter(spans::BatchExporter::new(
                                 &self.provider_name,
                                 self.provider_group,
                                 self.use_byte_for_bools,
@@ -274,7 +292,7 @@ impl ExporterBuilder {
                     let provider_builder = match self.exporter_config {
                         Some(exporter_config) => {
                             opentelemetry_sdk::trace::TracerProvider::builder().with_batch_exporter(
-                                BatchExporter::new(
+                                spans::BatchExporter::new(
                                     &self.provider_name,
                                     self.provider_group,
                                     self.use_byte_for_bools,
@@ -290,7 +308,7 @@ impl ExporterBuilder {
                         }
                         None => opentelemetry_sdk::trace::TracerProvider::builder()
                             .with_batch_exporter(
-                                BatchExporter::new(
+                                spans::BatchExporter::new(
                                     &self.provider_name,
                                     self.provider_group,
                                     self.use_byte_for_bools,
@@ -330,7 +348,7 @@ impl ExporterBuilder {
 
             match self.exporter_config {
                 Some(exporter_config) => {
-                    let provider = RealtimeTracerProvider::new(
+                    let provider = spans::RealtimeTracerProvider::new(
                         &self.provider_name,
                         self.provider_group,
                         otel_config,
@@ -346,7 +364,7 @@ impl ExporterBuilder {
                     let _ = global::set_tracer_provider(provider);
                 }
                 None => {
-                    let provider = RealtimeTracerProvider::new(
+                    let provider = spans::RealtimeTracerProvider::new(
                         &self.provider_name,
                         self.provider_group,
                         otel_config,

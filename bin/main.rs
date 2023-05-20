@@ -40,7 +40,7 @@ impl otel_etw::KeywordLevelProvider for Kwl {
 fn main() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        let tracer2 = otel_etw::spans::new_exporter("SampleProviderName")
+        let tracer2 = otel_etw::new_exporter("SampleProviderName")
             .with_common_schema_events()
             .without_realtime_events()
             .with_async_runtime(EtwExporterAsyncRuntime::Tokio)

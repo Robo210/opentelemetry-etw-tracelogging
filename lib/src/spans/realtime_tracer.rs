@@ -1,4 +1,4 @@
-use crate::spans::builder::ProviderGroup;
+use crate::builder::ProviderGroup;
 #[allow(unused_imports)]
 use crate::etw;
 use crate::exporter_traits::*;
