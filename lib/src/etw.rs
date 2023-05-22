@@ -725,7 +725,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
     where
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
-        if !self.exporter_config.get_export_span_events() {
+        if !self.exporter_config.get_export_etw_activity_events() {
             // Common schema events are logged at span end
             return Ok(());
         }
@@ -773,8 +773,8 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
                 export_payload_as_json,
             )?;
 
-            let links_keywords = self.exporter_config.get_links_keywords();
-            let links_level = self.exporter_config.get_links_level().into();
+            let links_keywords = self.exporter_config.get_span_links_keywords();
+            let links_level = self.exporter_config.get_span_links_level().into();
 
             if self.provider.enabled(links_level, links_keywords) {
                 ebw.write_span_links(
@@ -814,7 +814,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
             let mut ebw = ebw.borrow_mut();
 
             if self.provider.enabled(span_level, span_keywords)
-                && self.exporter_config.get_export_span_events()
+                && self.exporter_config.get_export_etw_activity_events()
             {
                 let activities = Activities::generate(
                     &span_data.span_context.span_id(),
@@ -840,7 +840,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
             }
 
             if self.provider.enabled(span_level, span_keywords)
-                && self.exporter_config.get_export_common_schema_event()
+                && self.exporter_config.get_export_common_schema_events()
             {
                 let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
                 ebw.write_common_schema_span(
@@ -864,11 +864,11 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
     where
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
-        let event_keywords = self.exporter_config.get_event_keywords();
-        let event_level = self.exporter_config.get_event_level().into();
+        let event_keywords = self.exporter_config.get_span_event_keywords();
+        let event_level = self.exporter_config.get_span_event_level().into();
 
         if !self.provider.enabled(event_level, event_keywords)
-            || !self.exporter_config.get_export_span_events()
+            || !self.exporter_config.get_export_etw_activity_events()
         {
             // TODO: Common Schema PartB SpanEvent events
             return Ok(());
@@ -973,7 +973,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
             let mut err = Ok(());
 
             if self.provider.enabled(level, span_keywords)
-                && self.exporter_config.get_export_span_events()
+                && self.exporter_config.get_export_etw_activity_events()
             {
                 let activities = Activities::generate(
                     &span_data.span_context.span_id(),
@@ -998,8 +998,8 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
                         export_payload_as_json,
                     )
                     .and_then(|_| {
-                        let event_keywords = self.exporter_config.get_event_keywords();
-                        let event_level = self.exporter_config.get_event_level().into();
+                        let event_keywords = self.exporter_config.get_span_event_keywords();
+                        let event_level = self.exporter_config.get_span_event_level().into();
 
                         if self.provider.enabled(event_level, event_keywords) {
                             ebw.write_span_events(
@@ -1016,8 +1016,8 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
                         }
                     })
                     .and_then(|_| {
-                        let links_keywords = self.exporter_config.get_links_keywords();
-                        let links_level = self.exporter_config.get_links_level().into();
+                        let links_keywords = self.exporter_config.get_span_links_keywords();
+                        let links_level = self.exporter_config.get_span_links_level().into();
 
                         if self.provider.enabled(links_level, links_keywords) {
                             ebw.write_span_links(
@@ -1054,7 +1054,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
             }
 
             if self.provider.enabled(Level::Informational, span_keywords)
-                && self.exporter_config.get_export_common_schema_event()
+                && self.exporter_config.get_export_common_schema_events()
             {
                 let attributes = span_data.attributes.iter(); //.chain(span_data.resource.iter());
 
@@ -1077,7 +1077,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
     }
 
     fn log_log_data(&self, log_data: &LogData) -> logs::ExportResult {
-        let log_keywords = self.exporter_config.get_log_keywords();
+        let log_keywords = self.exporter_config.get_log_event_keywords();
 
         let use_byte_for_bools = match self.bool_representation {
             InType::U8 => true,
@@ -1095,7 +1095,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
             let mut err = Ok(());
 
             if self.provider.enabled(level, log_keywords)
-                && self.exporter_config.get_export_log_events()
+                && self.exporter_config.get_export_etw_activity_events()
             {
                 let activities = if let Some(ref trace_context) = log_record.trace_context {
                     Activities::generate(
@@ -1119,7 +1119,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
             }
 
             if self.provider.enabled(Level::Informational, log_keywords)
-                && self.exporter_config.get_export_common_schema_event()
+                && self.exporter_config.get_export_common_schema_events()
             {
                 let err2 = ebw.write_common_schema_log_event(
                     &self.provider.as_ref(),

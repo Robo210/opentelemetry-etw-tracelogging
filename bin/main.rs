@@ -12,19 +12,19 @@ const SAMPLE_KEY_FLOAT: Key = Key::from_static_str("float");
 
 struct Kwl;
 impl otel_etw::KeywordLevelProvider for Kwl {
-    fn get_event_keywords(&self) -> u64 {
+    fn get_span_event_keywords(&self) -> u64 {
         1
     }
 
-    fn get_event_level(&self) -> u8 {
+    fn get_span_event_level(&self) -> u8 {
         1
     }
 
-    fn get_links_keywords(&self) -> u64 {
+    fn get_span_links_keywords(&self) -> u64 {
         1
     }
 
-    fn get_links_level(&self) -> u8 {
+    fn get_span_links_level(&self) -> u8 {
         1
     }
 
@@ -33,6 +33,14 @@ impl otel_etw::KeywordLevelProvider for Kwl {
     }
 
     fn get_span_level(&self) -> u8 {
+        1
+    }
+
+    fn get_log_event_keywords(&self) -> u64 {
+        1
+    }
+
+    fn get_log_event_level(&self) -> u8 {
         1
     }
 }

@@ -11,16 +11,22 @@ pub trait KeywordLevelProvider: Send + Sync {
     /// The keyword(s) to use for Span start/stop events.
     fn get_span_keywords(&self) -> u64;
     /// The keyword(s) to use for Span Event events.
-    fn get_event_keywords(&self) -> u64;
+    fn get_span_event_keywords(&self) -> u64;
     /// The keyword(s) to use for Span Link events.
-    fn get_links_keywords(&self) -> u64;
+    fn get_span_links_keywords(&self) -> u64;
+
+    /// The keyword(s) to use for Log events.
+    fn get_log_event_keywords(&self) -> u64;
 
     /// The level to use for Span start/stop events.
     fn get_span_level(&self) -> u8;
-    /// The keyword(s) to use for Span Event events.
-    fn get_event_level(&self) -> u8;
-    /// The keyword(s) to use for Span Link events.
-    fn get_links_level(&self) -> u8;
+    /// The level to use for Span Event events.
+    fn get_span_event_level(&self) -> u8;
+    /// The level to use for Span Link events.
+    fn get_span_links_level(&self) -> u8;
+
+    /// The level to use for Log events.
+    fn get_log_event_level(&self) -> u8;
 }
 
 pub(crate) struct ExporterConfig<T: KeywordLevelProvider> {
@@ -39,13 +45,18 @@ impl KeywordLevelProvider for DefaultKeywordLevelProvider {
     }
 
     #[inline(always)]
-    fn get_event_keywords(&self) -> u64 {
+    fn get_span_event_keywords(&self) -> u64 {
         0x10
     }
 
     #[inline(always)]
-    fn get_links_keywords(&self) -> u64 {
+    fn get_span_links_keywords(&self) -> u64 {
         0x100
+    }
+
+    #[inline(always)]
+    fn get_log_event_keywords(&self) -> u64 {
+        0x1000
     }
 
     #[inline(always)]
@@ -54,13 +65,18 @@ impl KeywordLevelProvider for DefaultKeywordLevelProvider {
     }
 
     #[inline(always)]
-    fn get_event_level(&self) -> u8 {
+    fn get_span_event_level(&self) -> u8 {
         5 // Level::Verbose
     }
 
     #[inline(always)]
-    fn get_links_level(&self) -> u8 {
+    fn get_span_links_level(&self) -> u8 {
         5 // Level::Verbose
+    }
+
+    #[inline(always)]
+    fn get_log_event_level(&self) -> u8 {
+        4 // Level::Informational
     }
 }
 
@@ -71,13 +87,18 @@ impl KeywordLevelProvider for Box<dyn KeywordLevelProvider> {
     }
 
     #[inline(always)]
-    fn get_event_keywords(&self) -> u64 {
-        self.as_ref().get_event_keywords()
+    fn get_span_event_keywords(&self) -> u64 {
+        self.as_ref().get_span_event_keywords()
     }
 
     #[inline(always)]
-    fn get_links_keywords(&self) -> u64 {
-        self.as_ref().get_links_keywords()
+    fn get_span_links_keywords(&self) -> u64 {
+        self.as_ref().get_span_links_keywords()
+    }
+
+    #[inline(always)]
+    fn get_log_event_keywords(&self) -> u64 {
+        self.as_ref().get_log_event_keywords()
     }
 
     #[inline(always)]
@@ -86,13 +107,18 @@ impl KeywordLevelProvider for Box<dyn KeywordLevelProvider> {
     }
 
     #[inline(always)]
-    fn get_event_level(&self) -> u8 {
-        self.as_ref().get_event_level()
+    fn get_span_event_level(&self) -> u8 {
+        self.as_ref().get_span_event_level()
     }
 
     #[inline(always)]
-    fn get_links_level(&self) -> u8 {
-        self.as_ref().get_links_level()
+    fn get_span_links_level(&self) -> u8 {
+        self.as_ref().get_span_links_level()
+    }
+
+    #[inline(always)]
+    fn get_log_event_level(&self) -> u8 {
+        self.as_ref().get_log_event_level()
     }
 }
 
@@ -103,13 +129,18 @@ impl<T: KeywordLevelProvider> KeywordLevelProvider for ExporterConfig<T> {
     }
 
     #[inline(always)]
-    fn get_event_keywords(&self) -> u64 {
-        self.kwl.get_event_keywords()
+    fn get_span_event_keywords(&self) -> u64 {
+        self.kwl.get_span_event_keywords()
     }
 
     #[inline(always)]
-    fn get_links_keywords(&self) -> u64 {
-        self.kwl.get_links_keywords()
+    fn get_span_links_keywords(&self) -> u64 {
+        self.kwl.get_span_links_keywords()
+    }
+
+    #[inline(always)]
+    fn get_log_event_keywords(&self) -> u64 {
+        self.kwl.get_log_event_keywords()
     }
 
     #[inline(always)]
@@ -118,13 +149,18 @@ impl<T: KeywordLevelProvider> KeywordLevelProvider for ExporterConfig<T> {
     }
 
     #[inline(always)]
-    fn get_event_level(&self) -> u8 {
-        self.kwl.get_event_level()
+    fn get_span_event_level(&self) -> u8 {
+        self.kwl.get_span_event_level()
     }
 
     #[inline(always)]
-    fn get_links_level(&self) -> u8 {
-        self.kwl.get_links_level()
+    fn get_span_links_level(&self) -> u8 {
+        self.kwl.get_span_links_level()
+    }
+
+    #[inline(always)]
+    fn get_log_event_level(&self) -> u8 {
+        self.kwl.get_log_event_level()
     }
 }
 
@@ -135,12 +171,12 @@ impl<T: KeywordLevelProvider> ExporterConfig<T> {
     }
 
     #[inline(always)]
-    pub(crate) fn get_export_common_schema_event(&self) -> bool {
+    pub(crate) fn get_export_common_schema_events(&self) -> bool {
         self.common_schema
     }
 
     #[inline(always)]
-    pub(crate) fn get_export_span_events(&self) -> bool {
+    pub(crate) fn get_export_etw_activity_events(&self) -> bool {
         self.etw_activities
     }
 }

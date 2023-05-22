@@ -28,20 +28,26 @@ impl KeywordLevelProvider for BenchExporterConfig {
     fn get_span_keywords(&self) -> u64 {
         1
     }
-    fn get_event_keywords(&self) -> u64 {
+    fn get_span_event_keywords(&self) -> u64 {
         2
     }
-    fn get_links_keywords(&self) -> u64 {
+    fn get_span_links_keywords(&self) -> u64 {
         4
+    }
+    fn get_log_event_keywords(&self) -> u64 {
+        8
     }
     fn get_span_level(&self) -> u8 {
         4 // Level::Informational
     }
-    fn get_event_level(&self) -> u8 {
+    fn get_span_event_level(&self) -> u8 {
         5 // Level::Verbose
     }
-    fn get_links_level(&self) -> u8 {
+    fn get_span_links_level(&self) -> u8 {
         5 // Level::Verbose
+    }
+    fn get_log_event_level(&self) -> u8 {
+        4 // Level::Informational
     }
 }
 

@@ -22,8 +22,8 @@ pub(crate) fn register_eventsets(
     {
         // Standard real-time level/keyword pairs
         provider.register_set(kwl.get_span_level().into(), kwl.get_span_keywords());
-        provider.register_set(kwl.get_event_level().into(), kwl.get_event_keywords());
-        provider.register_set(kwl.get_links_level().into(), kwl.get_links_keywords());
+        provider.register_set(kwl.get_span_event_level().into(), kwl.get_span_event_keywords());
+        provider.register_set(kwl.get_span_links_level().into(), kwl.get_span_links_keywords());
 
         // Common Schema events use a level based on a span's Status
         provider.register_set(eventheader::Level::Informational, kwl.get_span_keywords());
@@ -34,8 +34,8 @@ pub(crate) fn register_eventsets(
     {
         // Standard real-time level/keyword pairs
         provider.create_unregistered(true, kwl.get_span_level().into(), kwl.get_span_keywords());
-        provider.create_unregistered(true, kwl.get_event_level().into(), kwl.get_event_keywords());
-        provider.create_unregistered(true, kwl.get_links_level().into(), kwl.get_links_keywords());
+        provider.create_unregistered(true, kwl.get_span_event_level().into(), kwl.get_span_event_keywords());
+        provider.create_unregistered(true, kwl.get_span_links_level().into(), kwl.get_span_links_keywords());
 
         // Common Schema events use a level based on a span's Status
         provider.create_unregistered(
@@ -522,7 +522,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
     where
         S: opentelemetry_api::trace::Span + EtwSpan,
     {
-        if !self.exporter_config.get_export_span_events() {
+        if !self.exporter_config.get_export_etw_activity_events() {
             // Common schema events are logged at span end
             return Ok(());
         }
@@ -570,8 +570,8 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
             )?;
 
             let links_es = if let Some(es) = self.provider.find_set(
-                self.exporter_config.get_links_level().into(),
-                self.exporter_config.get_links_keywords(),
+                self.exporter_config.get_span_links_level().into(),
+                self.exporter_config.get_span_links_keywords(),
             ) {
                 es
             } else {
@@ -619,7 +619,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
         EBW.with(|eb| {
             let mut eb = eb.borrow_mut();
 
-            if self.exporter_config.get_export_span_events() {
+            if self.exporter_config.get_export_etw_activity_events() {
                 let activities = Activities::generate(
                     &span_data.span_context.span_id(),
                     &span_data.parent_span_id,
@@ -641,7 +641,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                 )?;
             }
 
-            if self.exporter_config.get_export_common_schema_event() {
+            if self.exporter_config.get_export_common_schema_events() {
                 let attributes = span_data.resource.iter().chain(span_data.attributes.iter());
                 self.write_common_schema_span(
                     &span_es,
@@ -676,7 +676,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
             return Ok(());
         }
 
-        if !self.exporter_config.get_export_span_events() {
+        if !self.exporter_config.get_export_etw_activity_events() {
             // TODO: Common Schema PartB SpanEvent events
             return Ok(());
         }
@@ -784,7 +784,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
             let mut eb = eb.borrow_mut();
             let mut err = Ok(());
 
-            if self.exporter_config.get_export_span_events() {
+            if self.exporter_config.get_export_etw_activity_events() {
                 let activities = Activities::generate(
                     &span_data.span_context.span_id(),
                     &span_data.parent_span_id,
@@ -807,8 +807,8 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                     )
                     .and_then(|_| {
                         let events_es = if let Some(es) = self.provider.find_set(
-                            self.exporter_config.get_event_level().into(),
-                            self.exporter_config.get_event_keywords(),
+                            self.exporter_config.get_span_event_level().into(),
+                            self.exporter_config.get_span_event_keywords(),
                         ) {
                             es
                         } else {
@@ -829,8 +829,8 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                     })
                     .and_then(|_| {
                         let links_es = if let Some(es) = self.provider.find_set(
-                            self.exporter_config.get_links_level().into(),
-                            self.exporter_config.get_links_keywords(),
+                            self.exporter_config.get_span_links_level().into(),
+                            self.exporter_config.get_span_links_keywords(),
                         ) {
                             es
                         } else {
@@ -867,7 +867,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                     });
             }
 
-            if self.exporter_config.get_export_common_schema_event() {
+            if self.exporter_config.get_export_common_schema_events() {
                 let span_es = if let Some(es) = self.provider.find_set(
                     Level::Informational,
                     self.exporter_config.get_span_keywords(),
