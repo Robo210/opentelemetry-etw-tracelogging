@@ -364,6 +364,10 @@ impl EtwEventBuilderWrapper {
             self.add_str8("TraceId", &activities.trace_id_name, OutType::Utf8, 0);
         }
 
+        if let Some(ref body) = log_record.body {
+            self.add_str8("Body", body.to_string(), OutType::Utf8, 0);
+        }
+
         let mut added = false;
 
         #[cfg(feature = "json")]

@@ -1,9 +1,8 @@
 use std::borrow::Cow;
 
 use crate::spans;
+use crate::logs;
 use crate::exporter_traits::*;
-use opentelemetry::global::GlobalTracerProvider;
-use opentelemetry_api::{global, trace::TracerProvider};
 use tracelogging_dynamic::Guid;
 
 pub(crate) enum ProviderGroup {
@@ -16,18 +15,17 @@ pub(crate) enum ProviderGroup {
 
 /// Create a new exporter builder by calling [`new_exporter`].
 pub struct ExporterBuilder {
-    provider_name: String,
-    provider_id: Guid,
-    provider_group: ProviderGroup,
-    span_exporter: bool,
-    log_exporter: bool,
-    use_byte_for_bools: bool,
-    json: bool,
-    emit_common_schema_events: bool,
-    emit_realtime_events: bool,
-    runtime: Option<EtwExporterAsyncRuntime>,
-    trace_config: Option<opentelemetry_sdk::trace::Config>,
-    exporter_config: Option<Box<dyn KeywordLevelProvider>>,
+    pub(crate) provider_name: String,
+    pub(crate) provider_id: Guid,
+    pub(crate) provider_group: ProviderGroup,
+    pub(crate) span_exporter: bool,
+    pub(crate) log_exporter: bool,
+    pub(crate) use_byte_for_bools: bool,
+    pub(crate) json: bool,
+    pub(crate) emit_common_schema_events: bool,
+    pub(crate) emit_realtime_events: bool,
+    pub(crate) runtime: Option<EtwExporterAsyncRuntime>,
+    pub(crate) exporter_config: Option<Box<dyn KeywordLevelProvider>>,
 }
 
 /// Create an exporter builder. After configuring the builder,
@@ -45,7 +43,6 @@ pub fn new_exporter(name: &str) -> ExporterBuilder {
         emit_common_schema_events: false,
         emit_realtime_events: true,
         runtime: None,
-        trace_config: None,
         exporter_config: None,
     }
 }
@@ -66,14 +63,18 @@ impl ExporterBuilder {
         self.provider_id
     }
 
-    pub fn with_span_exporter(mut self) -> Self {
-        self.span_exporter = true;
-        self
+    pub fn tracing(mut self) -> spans::SpanExporterBuilder {
+        spans::SpanExporterBuilder {
+            parent: self,
+            trace_config: None
+        }
     }
 
-    pub fn with_log_exporter(mut self) -> Self {
-        self.log_exporter = true;
-        self
+    pub fn logs(mut self) -> logs::LogsExporterBuilder {
+        logs::LogsExporterBuilder {
+            parent: self,
+            log_config: None
+        }
     }
 
     /// Log bool attributes using an InType of `xs:byte` instead of `win:Boolean`.
@@ -82,12 +83,6 @@ impl ExporterBuilder {
     /// This option has no effect for Linux user_events.
     pub fn with_byte_sized_bools(mut self) -> Self {
         self.use_byte_for_bools = true;
-        self
-    }
-
-    /// Assign the SDK trace configuration.
-    pub fn with_trace_config(mut self, config: opentelemetry_sdk::trace::Config) -> Self {
-        self.trace_config = Some(config);
         self
     }
 
@@ -170,7 +165,7 @@ impl ExporterBuilder {
         self
     }
 
-    fn validate_config(&self) {
+    pub(crate) fn validate_config(&self) {
         if !self.span_exporter && !self.log_exporter {
             panic!("at least one exporter type (log, span) must be enabled");
         }
@@ -219,176 +214,6 @@ impl ExporterBuilder {
             //panic!("Linux provider names must be ASCII alphanumeric");
         }
     }
-
-    /// Install the exporter as the
-    /// [global tracer provider](https://docs.rs/opentelemetry_api/latest/opentelemetry_api/global/index.html).
-    pub fn install(
-        mut self,
-    ) -> <GlobalTracerProvider as opentelemetry_api::trace::TracerProvider>::Tracer {
-        self.validate_config();
-
-        // This will always return a boxed trait object.
-        // Hopefully that won't cause too much of a performance issue, since that is a limitation of the global tracer as well.
-
-        // Avoid adding an extra dyn indirection by making sure BatchExporter/RealtimeExporter can be specialized for the keyword provider type.
-        // Non-default keyword providers will always be boxed trait objects, but that shouldn't be the common case.
-
-        if !self.emit_realtime_events {
-            let provider_builder = match self.runtime {
-                None => {
-                    let provider_builder = match self.exporter_config {
-                        Some(exporter_config) => {
-                            opentelemetry_sdk::trace::TracerProvider::builder()
-                                .with_simple_exporter(spans::BatchExporter::new(
-                                    &self.provider_name,
-                                    self.provider_group,
-                                    self.use_byte_for_bools,
-                                    ExporterConfig {
-                                        kwl: exporter_config,
-                                        json: self.json,
-                                        common_schema: self.emit_common_schema_events,
-                                        etw_activities: self.emit_realtime_events,
-                                    },
-                                ))
-                        }
-                        None => opentelemetry_sdk::trace::TracerProvider::builder()
-                            .with_simple_exporter(spans::BatchExporter::new(
-                                &self.provider_name,
-                                self.provider_group,
-                                self.use_byte_for_bools,
-                                ExporterConfig {
-                                    kwl: DefaultKeywordLevelProvider,
-                                    json: self.json,
-                                    common_schema: self.emit_common_schema_events,
-                                    etw_activities: self.emit_realtime_events,
-                                },
-                            )),
-                    };
-
-                    if let Some(config) = self.trace_config.take() {
-                        provider_builder.with_config(config)
-                    } else {
-                        provider_builder
-                    }
-                }
-                #[cfg(any(
-                    feature = "rt-tokio",
-                    feature = "rt-tokio-current-thread",
-                    feature = "rt-async-std"
-                ))]
-                Some(runtime) => {
-                    // If multiple runtimes are enabled this won't compile due to mismatched arms in the match
-                    let runtime = match runtime {
-                        #[cfg(any(feature = "rt-tokio"))]
-                        EtwExporterAsyncRuntime::Tokio => opentelemetry_sdk::runtime::Tokio,
-                        #[cfg(any(feature = "rt-tokio-current-thread"))]
-                        EtwExporterAsyncRuntime::TokioCurrentThread => {
-                            opentelemetry_sdk::runtime::TokioCurrentThread
-                        }
-                        #[cfg(any(feature = "rt-async-std"))]
-                        EtwExporterAsyncRuntime::AsyncStd => opentelemetry_sdk::runtime::AsyncStd,
-                    };
-
-                    let provider_builder = match self.exporter_config {
-                        Some(exporter_config) => {
-                            opentelemetry_sdk::trace::TracerProvider::builder().with_batch_exporter(
-                                spans::BatchExporter::new(
-                                    &self.provider_name,
-                                    self.provider_group,
-                                    self.use_byte_for_bools,
-                                    ExporterConfig {
-                                        kwl: exporter_config,
-                                        json: self.json,
-                                        common_schema: self.emit_common_schema_events,
-                                        etw_activities: self.emit_realtime_events,
-                                    },
-                                ),
-                                runtime,
-                            )
-                        }
-                        None => opentelemetry_sdk::trace::TracerProvider::builder()
-                            .with_batch_exporter(
-                                spans::BatchExporter::new(
-                                    &self.provider_name,
-                                    self.provider_group,
-                                    self.use_byte_for_bools,
-                                    ExporterConfig {
-                                        kwl: DefaultKeywordLevelProvider,
-                                        json: self.json,
-                                        common_schema: self.emit_common_schema_events,
-                                        etw_activities: self.emit_realtime_events,
-                                    },
-                                ),
-                                runtime,
-                            ),
-                    };
-
-                    if let Some(config) = self.trace_config.take() {
-                        provider_builder.with_config(config)
-                    } else {
-                        provider_builder
-                    }
-                }
-                #[cfg(not(any(
-                    feature = "rt-tokio",
-                    feature = "rt-tokio-current-thread",
-                    feature = "rt-async-std"
-                )))]
-                Some(_) => todo!(), // Unreachable
-            };
-
-            let provider = provider_builder.build();
-            let _ = global::set_tracer_provider(provider);
-        } else {
-            let otel_config = if let Some(config) = self.trace_config.take() {
-                config
-            } else {
-                opentelemetry_sdk::trace::config()
-            };
-
-            match self.exporter_config {
-                Some(exporter_config) => {
-                    let provider = spans::RealtimeTracerProvider::new(
-                        &self.provider_name,
-                        self.provider_group,
-                        otel_config,
-                        self.use_byte_for_bools,
-                        ExporterConfig {
-                            kwl: exporter_config,
-                            json: self.json,
-                            common_schema: self.emit_common_schema_events,
-                            etw_activities: self.emit_realtime_events,
-                        },
-                    );
-
-                    let _ = global::set_tracer_provider(provider);
-                }
-                None => {
-                    let provider = spans::RealtimeTracerProvider::new(
-                        &self.provider_name,
-                        self.provider_group,
-                        otel_config,
-                        self.use_byte_for_bools,
-                        ExporterConfig {
-                            kwl: DefaultKeywordLevelProvider,
-                            json: self.json,
-                            common_schema: self.emit_common_schema_events,
-                            etw_activities: self.emit_realtime_events,
-                        },
-                    );
-
-                    let _ = global::set_tracer_provider(provider);
-                }
-            }
-        }
-
-        global::tracer_provider().tracer(
-            #[cfg(all(target_os = "windows"))]
-            "opentelemetry-etw",
-            #[cfg(all(target_os = "linux"))]
-            "opentelemetry-user_events",
-        )
-    }
 }
 
 #[cfg(test)]
@@ -432,11 +257,12 @@ mod tests {
             .with_common_schema_events()
             .without_realtime_events()
             .with_async_runtime(EtwExporterAsyncRuntime::Tokio)
-            .install();
+            .tracing()
+            .install_span_exporter();
     }
 
     #[test]
     fn install_realtime() {
-        new_exporter("my_provider_name").install();
+        new_exporter("my_provider_name").tracing().install_span_exporter();
     }
 }

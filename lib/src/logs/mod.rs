@@ -1,5 +1,7 @@
 mod batch_exporter;
-//mod realtime_tracer;
+mod realtime_logger;
+mod builder;
 
 pub(crate) use batch_exporter::*;
-//pub use realtime_tracer::*;
+pub use realtime_logger::*;
+pub use builder::*;
