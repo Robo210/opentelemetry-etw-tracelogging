@@ -6,7 +6,9 @@ use opentelemetry::{Array, Key, Value};
 use opentelemetry_api::logs::AnyValue;
 
 #[cfg(feature = "json")]
-pub(crate) fn get_attributes_as_json(attribs: &mut dyn Iterator<Item = (&Key, &Value)>) -> String {
+pub(crate) fn get_attributes_as_json<'a, C>(attribs: C) -> String
+where C: Iterator<Item = (&'a Key, &'a Value)>
+{
     let mut payload: std::collections::BTreeMap<String, serde_json::Value> = Default::default();
 
     for attrib in attribs {
@@ -117,7 +119,8 @@ fn get_value(av: &AnyValue) -> serde_json::Value {
 }
 
 #[cfg(feature = "json")]
-pub(crate) fn get_log_attributes_as_json(attribs: &mut dyn Iterator<Item = (&Key, &AnyValue)>) -> String {
+pub(crate) fn get_log_attributes_as_json<'a, C>(attribs: C) -> String
+where C: Iterator<Item = (&'a Key, &'a AnyValue)> {
     let mut payload: std::collections::BTreeMap<String, serde_json::Value> = Default::default();
 
     for attrib in attribs {

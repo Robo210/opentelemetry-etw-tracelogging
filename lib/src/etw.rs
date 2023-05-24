@@ -79,11 +79,11 @@ impl EtwEventBuilderWrapper {
         self
     }
 
-    fn add_attributes_to_event(
+    fn add_attributes_to_event<'a, C>(
         &mut self,
-        attribs: &mut dyn Iterator<Item = (&Key, &Value)>,
+        attribs: C,
         use_byte_for_bools: bool,
-    ) {
+    ) where C: Iterator<Item = (&'a Key, &'a Value)> {
         for attrib in attribs {
             let field_name = attrib.0.as_str();
             match attrib.1 {
@@ -142,11 +142,11 @@ impl EtwEventBuilderWrapper {
 
     // LogRecord's attributes are of type (Key, AnyValue) while a SpanData's are (Key, Value),
     // so we have to duplicate entirely too much code just to compensate for this... choice.
-    fn add_log_attributes_to_event(
+    fn add_log_attributes_to_event<'a, C>(
         &mut self,
-        attribs: &mut dyn Iterator<Item = (&Key, &AnyValue)>,
+        attribs: &mut C,
         use_byte_for_bools: bool,
-    ) {
+    ) where C: Iterator<Item = (&'a Key, &'a AnyValue)> {
         for attrib in attribs {
             let field_name = attrib.0.as_str();
             match attrib.1 {
@@ -185,7 +185,7 @@ impl EtwEventBuilderWrapper {
         }
     }
 
-    fn write_span_links(
+    fn write_span_links<'a, C>(
         &mut self,
         tlg_provider: &Pin<&Provider>,
         level: Level,
@@ -193,9 +193,12 @@ impl EtwEventBuilderWrapper {
         activities: &Activities,
         event_name: &str,
         span_timestamp: &SystemTime,
-        links: &mut dyn Iterator<Item = &Link>,
+        links: &mut C,
         use_byte_for_bools: bool,
-    ) -> trace::ExportResult {
+    ) -> trace::ExportResult
+    where
+        C: Iterator<Item = &'a Link>
+    {
         for link in links {
             self.reset(event_name, level, keywords, EVENT_TAG_IGNORE_EVENT_TIME);
             self.opcode(Opcode::Info);
@@ -238,16 +241,19 @@ impl EtwEventBuilderWrapper {
         Ok(())
     }
 
-    fn write_span_events(
+    fn write_span_events<'a, C>(
         &mut self,
         tlg_provider: &Pin<&Provider>,
         level: Level,
         keywords: u64,
         activities: &Activities,
-        events: &mut dyn Iterator<Item = &Event>,
+        events: &mut C,
         use_byte_for_bools: bool,
         export_payload_as_json: bool,
-    ) -> trace::ExportResult {
+    ) -> trace::ExportResult
+    where
+        C: Iterator<Item = &'a Event>
+    {
         for event in events {
             self.reset(&event.name, level, keywords, EVENT_TAG_IGNORE_EVENT_TIME);
             self.opcode(Opcode::Info);
@@ -304,34 +310,21 @@ impl EtwEventBuilderWrapper {
         Ok(())
     }
 
-    fn write_log_event(
+    fn write_log_event<'a, C>(
         &mut self,
         tlg_provider: &Pin<&Provider>,
+        event_name: &str,
         level: Level,
         keywords: u64,
         activities: &Activities,
         log_record: &LogRecord,
+        attributes: C,
         use_byte_for_bools: bool,
         export_payload_as_json: bool,
-    ) -> logs::ExportResult {
-        let body = log_record.body.as_ref();
-
-        let attributes = if let Some(ref attrs) = log_record.attributes {
-            &mut attrs.iter()
-        } else {
-            &mut opentelemetry::OrderMap::<Key, AnyValue, std::collections::hash_map::RandomState>::default().iter()
-        };
-
-        let mut event_name = "Event"; // TODO
-        for attrib in attributes.clone() {
-            if attrib.0.as_str() == "event.name" {
-                if let AnyValue::String(ref name) = attrib.1 {
-                    event_name = name.as_str();
-                    break;
-                }
-            }
-        }
-
+    ) -> logs::ExportResult
+    where
+        C: Iterator<Item = (&'a Key, &'a AnyValue)> + Clone,
+    {
         self.reset(&event_name, level, keywords, EVENT_TAG_IGNORE_EVENT_TIME);
         self.opcode(Opcode::Info);
 
@@ -410,7 +403,7 @@ impl EtwEventBuilderWrapper {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn write_span_event(
+    fn write_span_event<'a, C>(
         &mut self,
         tlg_provider: &Pin<&tracelogging_dynamic::Provider>,
         name: &str,
@@ -420,12 +413,15 @@ impl EtwEventBuilderWrapper {
         event_time: &SystemTime,
         span_kind: Option<&SpanKind>,
         status: &Status,
-        attributes: &mut dyn Iterator<Item = (&Key, &Value)>,
+        attributes: C,
         is_start: bool,
         add_tags: bool,
         use_byte_for_bools: bool,
         export_payload_as_json: bool,
-    ) -> trace::ExportResult {
+    ) -> trace::ExportResult
+    where
+        C: Iterator<Item = (&'a Key, &'a Value)> + Clone
+    {
         let (event_tags, field_tags) = if add_tags {
             (EVENT_TAG_IGNORE_EVENT_TIME, FIELD_TAG_IS_REAL_EVENT_TIME)
         } else {
@@ -478,13 +474,13 @@ impl EtwEventBuilderWrapper {
 
         #[cfg(feature = "json")]
         if export_payload_as_json {
-            let json_string = json::get_attributes_as_json(attributes);
+            let json_string = json::get_attributes_as_json(attributes.clone());
             self.add_str8("Payload", &json_string, OutType::Json, 0);
             added = true;
         }
 
         if !added {
-            self.add_attributes_to_event(attributes, use_byte_for_bools);
+            self.add_attributes_to_event(attributes.clone(), use_byte_for_bools);
         }
 
         let win32err = self.write(
@@ -585,7 +581,7 @@ impl EtwEventBuilderWrapper {
             partb_field_count += 1;
             status_message = Cow::Borrowed(description);
         }
-        // TODO: azureResourceProvider: string
+
         if !span_data.links.is_empty() {
             partb_field_count += 1; // Type is an "array", but really it's just a string with a JSON array
         }
@@ -634,7 +630,7 @@ impl EtwEventBuilderWrapper {
             if !status_message.is_empty() {
                 self.add_str8("statusMessage", status_message.as_ref(), OutType::Utf8, 0);
             }
-            // TODO: azureResourceProvider: string
+
             if !span_data.links.is_empty() {
                 let mut links = String::with_capacity(2 + (78 * span_data.links.len()));
                 links += "[";
@@ -649,7 +645,6 @@ impl EtwEventBuilderWrapper {
 
                 self.add_str8("links", &links, OutType::Json, 0);
             }
-            // TODO: promote HTTP, Database and Messaging fields
         }
 
         let partc_field_count = if export_payload_as_json {
@@ -678,6 +673,177 @@ impl EtwEventBuilderWrapper {
 
         if win32err != 0 {
             return Err(TraceError::ExportFailed(Box::new(Win32Error { win32err })));
+        }
+
+        Ok(())
+    }
+
+    fn write_common_schema_log_event<'a, C>(
+        &mut self,
+        tlg_provider: &Pin<&Provider>,
+        event_name: &str,
+        level: Level,
+        keywords: u64,
+        log_record: &LogRecord,
+        export_payload_as_json: bool,
+        attributes: C,
+    ) -> logs::ExportResult
+    where
+        C: Iterator<Item = (&'a Key, &'a AnyValue)> + ExactSizeIterator + Clone,
+    {
+        // Avoid allocations for these fixed-length strings
+
+        let trace_id = if let Some(ref trace_context) = log_record.trace_context {
+            unsafe {
+                let mut trace_id = MaybeUninit::<[u8; 32]>::uninit();
+                let mut cur = Cursor::new((&mut *trace_id.as_mut_ptr()).as_mut_slice());
+                write!(&mut cur, "{:32x}", trace_context.trace_id).expect("!write");
+                trace_id.assume_init()
+            }
+        } else {
+            unsafe {
+                core::mem::zeroed()
+            }
+        };
+
+        let span_id = if let Some(ref trace_context) = log_record.trace_context {
+            unsafe {
+                let mut span_id = MaybeUninit::<[u8; 16]>::uninit();
+                let mut cur = Cursor::new((&mut *span_id.as_mut_ptr()).as_mut_slice());
+                write!(&mut cur, "{:16x}", trace_context.span_id).expect("!write");
+                span_id.assume_init()
+            }
+        } else {
+            unsafe {
+                core::mem::zeroed()
+            }
+        };
+
+        let event_tags: u32 = 0; // TODO
+        self.reset(event_name, level, keywords, event_tags);
+        self.opcode(Opcode::Info);
+
+        // Promoting values from PartC to PartA extensions is apparently just a draft spec
+        // and not necessary / supported by consumers.
+        // let exts = json::extract_common_schema_parta_exts(attributes);
+
+        self.add_u16("__csver__", 0x0401, OutType::Signed, 0);
+        self.add_struct("PartA", 2 /* + exts.len() as u8*/, 0);
+        {
+            let observed_timestamp = log_record.observed_timestamp.unwrap_or_else(|| SystemTime::UNIX_EPOCH);
+            let timestamp = log_record.timestamp.unwrap_or_else(|| observed_timestamp);
+
+            let time: String = chrono::DateTime::to_rfc3339(
+                &chrono::DateTime::<chrono::Utc>::from(timestamp),
+            );
+            self.add_str8("time", time, OutType::Utf8, 0);
+
+            self.add_struct("ext_dt", 2, 0);
+            {
+                self.add_str8("traceId", &trace_id, OutType::Utf8, 0);
+                self.add_str8("spanId", &span_id, OutType::Utf8, 0);
+            }
+
+            // for ext in exts {
+            //     self.add_struct(ext.0, ext.1.len() as u8, 0);
+
+            //     for field in ext.1 {
+            //         self.add_str8(field.0, field.1.as_ref(), OutType::Utf8, 0);
+            //     }
+            // }
+        }
+
+        // if !span_data.links.is_empty() {
+        //     self.add_struct("PartB", 5, 0);
+        //     {
+        //         self.add_str8("_typeName", "SpanLink", OutType::Utf8, 0);
+        //         self.add_str8("fromTraceId", &traceId, OutType::Utf8, 0);
+        //         self.add_str8("fromSpanId", &spanId, OutType::Utf8, 0);
+        //         self.add_str8("toTraceId", "SpanLink", OutType::Utf8, 0);
+        //         self.add_str8("toSpanId", "SpanLink", OutType::Utf8, 0);
+        //     }
+        // }
+
+        let mut partb_field_count = 2u8;
+
+        let severity_number = if let Some(sev) = log_record.severity_number {
+            partb_field_count += 1;
+            sev as u8
+        } else {
+            0u8
+        };
+
+        let severity_text =  if let Some(ref txt) = log_record.severity_text {
+            partb_field_count += 1;
+            txt.clone()
+        } else {
+            Cow::default()
+        };
+
+        let mut has_timestamp = false;
+        let timestamp = if let Some(time) = log_record.timestamp {
+            partb_field_count += 1;
+            has_timestamp = true;
+            time
+        } else if let Some(obv_time) = log_record.observed_timestamp {
+            partb_field_count += 1;
+            has_timestamp = true;
+            obv_time
+        } else {
+            SystemTime::UNIX_EPOCH // The ETW event will have a timestamp on the header
+        };
+
+        self.add_struct("PartB", partb_field_count, 0);
+        {
+            self.add_str8("_typeName", "Log", OutType::Utf8, 0);
+            self.add_str8("name", event_name, OutType::Utf8, 0);
+
+            if has_timestamp { // We don't check for UNIX_EPOCH just in case that is the officially recorded timestamp
+                self.add_str8(
+                    "eventTime",
+                    &chrono::DateTime::to_rfc3339(&chrono::DateTime::<chrono::Utc>::from(
+                        timestamp,
+                    )),
+                    OutType::Utf8,
+                    0,
+                );
+            }
+
+            if severity_number > 0 {
+                self.add_u8("severityNumber", severity_number, OutType::Unsigned, 0);
+            }
+
+            if !severity_text.is_empty() {
+                self.add_str8("severityText", severity_text.as_ref(), OutType::Utf8, 0);
+            }
+        }
+
+        let partc_field_count = if export_payload_as_json {
+            1u8
+        } else {
+            attributes.len() as u8
+        };
+
+        self.add_struct("PartC", partc_field_count, 0);
+        {
+            let mut added = false;
+
+            #[cfg(feature = "json")]
+            if export_payload_as_json {
+                let json_string = json::get_log_attributes_as_json(&mut attributes.clone());
+                self.add_str8("Payload", &json_string, OutType::Json, 0);
+                added = true;
+            }
+
+            if !added {
+                self.add_log_attributes_to_event(&mut attributes.clone(), true);
+            }
+        }
+
+        let win32err = self.write(tlg_provider, None, None);
+
+        if win32err != 0 {
+            return Err(LogError::ExportFailed(Box::new(Win32Error { win32err })));
         }
 
         Ok(())
@@ -770,7 +936,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
                 &span_data.start_time,
                 Some(&span_data.span_kind),
                 &Status::Unset,
-                &mut std::iter::empty(),
+                std::iter::empty(),
                 true,
                 false,
                 use_byte_for_bools,
@@ -835,7 +1001,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
                     &span_data.end_time,
                     Some(&span_data.span_kind),
                     &span_data.status,
-                    &mut span_data.attributes.iter(),
+                    span_data.attributes.iter(),
                     false,
                     false,
                     use_byte_for_bools,
@@ -995,7 +1161,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
                         &span_data.start_time,
                         Some(&span_data.span_kind),
                         &span_data.status,
-                        &mut std::iter::empty(),
+                        std::iter::empty(),
                         true,
                         true,
                         use_byte_for_bools,
@@ -1048,7 +1214,7 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
                             &span_data.end_time,
                             Some(&span_data.span_kind),
                             &span_data.status,
-                            &mut span_data.attributes.iter(),
+                            span_data.attributes.iter(),
                             false,
                             true,
                             use_byte_for_bools,
@@ -1082,6 +1248,11 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
 
     fn log_log_data(&self, log_data: &LogData) -> logs::ExportResult {
         let log_keywords = self.exporter_config.get_log_event_keywords();
+        let level = if let Some(lvl) = log_data.record.severity_number {
+            Level::from_int(7 - ((lvl as u8 + 3) / 4))
+        } else {
+            Level::Informational
+        };
 
         let use_byte_for_bools = match self.bool_representation {
             InType::U8 => true,
@@ -1092,7 +1263,25 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
 
         let log_record = &log_data.record;
 
-        let level = Level::Informational; // TODO
+        let body = log_record.body.as_ref();
+
+        let _default = opentelemetry::OrderMap::<Key, AnyValue, std::collections::hash_map::RandomState>::default();
+
+        let attributes = if let Some(ref attrs) = log_record.attributes {
+            attrs.iter()
+        } else {
+            _default.iter()
+        };
+
+        let mut event_name = "Event"; // TODO
+        for attrib in attributes.clone() {
+            if attrib.0.as_str() == "event.name" {
+                if let AnyValue::String(ref name) = attrib.1 {
+                    event_name = name.as_str();
+                    break;
+                }
+            }
+        }
 
         EBW.with(|ebw| {
             let mut ebw = ebw.borrow_mut();
@@ -1111,12 +1300,14 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
                     Activities::default()
                 };
 
-                ebw.write_log_event(
+                err = ebw.write_log_event(
                     &self.provider.as_ref(),
+                    event_name,
                     level,
                     log_keywords,
                     &activities,
                     log_record,
+                    attributes.clone(),
                     use_byte_for_bools,
                     export_payload_as_json,
                 );
@@ -1127,17 +1318,12 @@ impl<C: KeywordLevelProvider> EventExporter for EtwEventExporter<C> {
             {
                 let err2 = ebw.write_common_schema_log_event(
                     &self.provider.as_ref(),
-                    &span_data.name,
+                    event_name,
                     Level::Informational,
-                    span_keywords,
-                    span_data,
-                    &span_data.span_context,
+                    log_keywords,
+                    log_record,
                     export_payload_as_json,
-                    if let Some(ref attrs) = log_record.attributes {
-                        &mut attrs.iter()
-                    } else {
-                        &mut opentelemetry::OrderMap::default().iter()
-                    },
+                    attributes.clone(),
                 );
 
                 err = err.and(err2);

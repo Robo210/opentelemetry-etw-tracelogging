@@ -63,14 +63,14 @@ impl ExporterBuilder {
         self.provider_id
     }
 
-    pub fn tracing(mut self) -> spans::SpanExporterBuilder {
+    pub fn tracing(self) -> spans::SpanExporterBuilder {
         spans::SpanExporterBuilder {
             parent: self,
             trace_config: None
         }
     }
 
-    pub fn logs(mut self) -> logs::LogsExporterBuilder {
+    pub fn logs(self) -> logs::LogsExporterBuilder {
         logs::LogsExporterBuilder {
             parent: self,
             log_config: None

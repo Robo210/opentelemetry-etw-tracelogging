@@ -66,11 +66,11 @@ impl<C: KeywordLevelProvider> UserEventsExporter<C> {
         }
     }
 
-    fn add_attributes_to_event(
+    fn add_attributes_to_event<'a, I>(
         &self,
         eb: &mut EventBuilder,
-        attribs: &mut dyn Iterator<Item = (&Key, &Value)>,
-    ) {
+        attribs: I,
+    ) where I: Iterator<Item = (&'a Key, &'a Value)> {
         for attrib in attribs {
             let field_name = &attrib.0.to_string();
             match attrib.1 {
@@ -232,7 +232,7 @@ impl<C: KeywordLevelProvider> UserEventsExporter<C> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn write_span_event(
+    fn write_span_event<'a, I>(
         &self,
         tlg_provider: &EventSet,
         eb: &mut EventBuilder,
@@ -241,11 +241,13 @@ impl<C: KeywordLevelProvider> UserEventsExporter<C> {
         event_time: &SystemTime,
         span_kind: Option<&SpanKind>,
         status: &Status,
-        attributes: &mut dyn Iterator<Item = (&Key, &Value)>,
+        attributes: I,
         is_start: bool,
         add_tags: bool,
         export_payload_as_json: bool,
-    ) -> ExportResult {
+    ) -> ExportResult
+    where I: Iterator<Item = (&'a Key, &'a Value)> + Clone
+    {
         let event_tags = if add_tags {
             EVENT_TAG_IGNORE_EVENT_TIME
         } else {
@@ -316,13 +318,13 @@ impl<C: KeywordLevelProvider> UserEventsExporter<C> {
 
         #[cfg(feature = "json")]
         if export_payload_as_json {
-            let json_string = json::get_attributes_as_json(attributes);
+            let json_string = json::get_attributes_as_json(attributes.clone());
             eb.add_str("Payload", &json_string, FieldFormat::StringJson, 0);
             added = true;
         }
 
         if !added {
-            self.add_attributes_to_event(eb, attributes);
+            self.add_attributes_to_event(eb, attributes.clone());
         }
 
         let err = eb.write(
@@ -563,7 +565,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                 &span_data.start_time,
                 Some(&span_data.span_kind),
                 &Status::Unset,
-                &mut std::iter::empty(),
+                std::iter::empty(),
                 true,
                 false,
                 export_payload_as_json,
@@ -634,7 +636,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                     &span_data.end_time,
                     Some(&span_data.span_kind),
                     &span_data.status,
-                    &mut span_data.attributes.iter(),
+                    span_data.attributes.iter(),
                     false,
                     false,
                     export_payload_as_json,
@@ -800,7 +802,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                         &span_data.start_time,
                         Some(&span_data.span_kind),
                         &span_data.status,
-                        &mut std::iter::empty(),
+                        std::iter::empty(),
                         true,
                         true,
                         export_payload_as_json,
@@ -859,7 +861,7 @@ impl<C: KeywordLevelProvider> EventExporter for UserEventsExporter<C> {
                             &span_data.end_time,
                             Some(&span_data.span_kind),
                             &span_data.status,
-                            &mut span_data.attributes.iter(),
+                            span_data.attributes.iter(),
                             false,
                             true,
                             export_payload_as_json,

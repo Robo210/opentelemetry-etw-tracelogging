@@ -23,7 +23,7 @@ impl SpanExporterBuilder {
     /// Install the exporter as the
     /// [global tracer provider](https://docs.rs/opentelemetry_api/latest/opentelemetry_api/global/index.html).
     pub fn install_span_exporter(
-        &mut self,
+        mut self,
     ) -> <GlobalTracerProvider as opentelemetry_api::trace::TracerProvider>::Tracer {
         self.parent.validate_config();
 

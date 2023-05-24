@@ -17,7 +17,7 @@ impl LogsExporterBuilder {
     /// Install the exporter as the
     /// [global logger provider](https://docs.rs/opentelemetry_api/latest/opentelemetry_api/global/index.html).
     pub fn install_log_exporter(
-        &mut self,
+        mut self,
     ) -> <GlobalLoggerProvider as opentelemetry_api::logs::LoggerProvider>::Logger {
         self.parent.validate_config();
 

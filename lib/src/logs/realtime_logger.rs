@@ -32,9 +32,9 @@ impl<E: EventExporter> opentelemetry_api::logs::Logger for RealtimeLogger<E> {
     fn emit(&self, record: LogRecord) {
          if let Some(exporter) = self.event_exporter.upgrade() {
             let config = if let Some(config) = self.otel_config.upgrade() {
-                config.as_ref()
+                config.clone()
             } else {
-                &opentelemetry_sdk::logs::config()
+                Default::default()
             };
 
             let data = LogData {
@@ -42,7 +42,7 @@ impl<E: EventExporter> opentelemetry_api::logs::Logger for RealtimeLogger<E> {
                 resource: config.resource.clone(),
                 instrumentation: self.instrumentation_lib.clone(),
             };
-            exporter.log_log_data(&data);
+            let _ = exporter.log_log_data(&data);
          }
     }
 }
