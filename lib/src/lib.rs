@@ -78,8 +78,9 @@
 //! use opentelemetry_api::global::shutdown_tracer_provider;
 //! use opentelemetry_api::trace::Tracer;
 //!
-//! let tracer = opentelemetry_etw_user_events::spans::new_exporter("MyEtwProviderName")
-//!     .install();
+//! let tracer = opentelemetry_etw_user_events::new_exporter("MyEtwProviderName")
+//!     .tracing()
+//!     .install_span_exporter();
 //!
 //! tracer.in_span("doing_work", |cx| {
 //!     // Traced app logic here...

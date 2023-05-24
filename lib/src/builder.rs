@@ -18,8 +18,6 @@ pub struct ExporterBuilder {
     pub(crate) provider_name: String,
     pub(crate) provider_id: Guid,
     pub(crate) provider_group: ProviderGroup,
-    pub(crate) span_exporter: bool,
-    pub(crate) log_exporter: bool,
     pub(crate) use_byte_for_bools: bool,
     pub(crate) json: bool,
     pub(crate) emit_common_schema_events: bool,
@@ -36,8 +34,6 @@ pub fn new_exporter(name: &str) -> ExporterBuilder {
         provider_name: name.to_owned(),
         provider_id: Guid::from_name(name),
         provider_group: ProviderGroup::Unset,
-        span_exporter: false,
-        log_exporter: false,
         use_byte_for_bools: false,
         json: false,
         emit_common_schema_events: false,
@@ -166,10 +162,6 @@ impl ExporterBuilder {
     }
 
     pub(crate) fn validate_config(&self) {
-        if !self.span_exporter && !self.log_exporter {
-            panic!("at least one exporter type (log, span) must be enabled");
-        }
-
         if !self.emit_common_schema_events && !self.emit_realtime_events {
             panic!("at least one ETW event type must be enabled");
         }
