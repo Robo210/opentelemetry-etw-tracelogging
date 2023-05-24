@@ -71,7 +71,8 @@ mod functional {
         let tracer = opentelemetry_etw_user_events::new_exporter(test_provider_name)
             .with_common_schema_events()
             .without_realtime_events()
-            .install();
+            .tracing()
+            .install_span_exporter();
 
         let h = EtwSession::get_or_start_etw_session(sz_test_session_name, false)?;
         h.enable_provider(&test_provider_id)?;

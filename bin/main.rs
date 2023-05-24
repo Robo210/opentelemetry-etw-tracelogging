@@ -53,7 +53,8 @@ fn main() {
             .without_realtime_events()
             .with_async_runtime(EtwExporterAsyncRuntime::Tokio)
             .with_custom_keywords_levels(Kwl{})
-            .install();
+            .tracing()
+            .install_span_exporter();
 
         tracer2.in_span("OuterSpanName", |cx| {
             std::thread::sleep(std::time::Duration::from_millis(1000));
