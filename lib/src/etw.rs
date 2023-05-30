@@ -822,10 +822,18 @@ impl EtwEventBuilderWrapper {
             1u8
         } else {
             attributes.len() as u8
+        } + if log_record.body.is_some() {
+            1
+        } else {
+            0
         };
 
         self.add_struct("PartC", partc_field_count, 0);
         {
+            if let Some(ref body) = log_record.body {
+                self.add_str8("Body", body.to_string(), OutType::Utf8, 0);
+            }
+
             let mut added = false;
 
             #[cfg(feature = "json")]
@@ -876,7 +884,6 @@ impl<C: KeywordLevelProvider> EtwEventExporter<C> {
         exporter_config: ExporterConfig<C>,
         bool_representation: InType,
     ) -> Self {
-        // Unfortunately we can't safely share a cached EventBuilder without adding undesirable locking
         EtwEventExporter {
             provider,
             exporter_config,

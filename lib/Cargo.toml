@@ -22,8 +22,8 @@ default = ["logs"]
 [dependencies]
 tracelogging = ">= 1.1.0"
 tracelogging_dynamic = ">= 1.1.0"
-eventheader = "0.1"
-eventheader_dynamic = "0.1"
+eventheader = "0.2"
+eventheader_dynamic = "0.2"
 opentelemetry = {workspace = true}
 opentelemetry_api = {workspace = true}
 opentelemetry_sdk = {workspace = true}

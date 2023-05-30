@@ -38,6 +38,7 @@ impl Activities {
             let mut activity_id: [u8; 16] = [0; 16];
             let (_, half) = activity_id.split_at_mut(8);
             half.copy_from_slice(&parent_span_id.to_bytes());
+            
             (Some(activity_id), buf)
         };
 
